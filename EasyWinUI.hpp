@@ -7,10 +7,10 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <cstring>
 #include <algorithm>
 #include <thread>
 #include <string_view>
-#include <optional>
 #include <concepts>
 #include <functional>
 #include <algorithm>
@@ -19,7 +19,16 @@
 
 namespace EWUI {
 
+    int Main();
+
     using ControlAction = std::function<void()>;
+
+    template<typename T, typename = std::enable_if_t<std::is_same_v<T, SIZE> ||  //
+                                                     std::is_same_v<T, POINT>>>
+    bool operator==( const T& LHS, const T& RHS )
+    {
+        return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
+    }
 
     struct tagActionContainer
     {
@@ -64,13 +73,6 @@ namespace EWUI {
         return 0;
     }
 
-    int Main();
-
-    struct Message
-    {
-        MSG InternalMessage{};
-    };
-
     struct tagEntryPointParamPack
     {
         HINSTANCE hInstance;
@@ -79,101 +81,74 @@ namespace EWUI {
         int nCmdShow;
     } EntryPointParamPack{};
 
+    template<typename T>
+    constexpr LPCSTR ControlClassName = std::decay_t<T>::ClassName;
+
     struct ControlConfig
     {
-        std::optional<HWND> Handle{};
-        std::optional<HWND> Parent{};
-        std::optional<HMENU> Menu{};
-        std::optional<LPCSTR> ClassName{};
-        std::optional<LPCSTR> Label{};
-        std::optional<DWORD> Style{};
-        std::optional<DWORD> ExStyle{};
-        std::optional<POINT> Origin{};
-        std::optional<SIZE> Dimension{};
-
-        constexpr void operator|=( const ControlConfig& Config_ ) noexcept
-        {
-            if( Config_.Handle ) Handle = *Config_.Handle;
-            if( Config_.Parent ) Parent = *Config_.Parent;
-            if( Config_.Menu ) Menu = *Config_.Menu;
-            if( Config_.ClassName ) ClassName = *Config_.ClassName;
-            if( Config_.Label ) Label = *Config_.Label;
-            if( Config_.Style ) Style = *Config_.Style;
-            if( Config_.ExStyle ) ExStyle = *Config_.ExStyle;
-            if( Config_.Origin ) Origin = *Config_.Origin;
-            if( Config_.Dimension ) Dimension = *Config_.Dimension;
-        }
-
+        HWND Handle{};
+        HWND Parent{};
+        HMENU Menu{};
+        LPCSTR ClassName{};
+        LPCSTR Label{};
+        DWORD Style{};
+        DWORD ExStyle{};
+        POINT Origin{ 0, 0 };
+        SIZE Dimension{ 200, 100 };
+        ControlAction Action{};
     } MainWindowConfig{};
 
     struct Control : ControlConfig
     {
-        Control( const ControlConfig& Config_ )
-        {
-            Dimension = { 100, 200 };
-            *this |= Config_;
-        }
-        operator HWND() const noexcept { return Handle.value_or( static_cast<HWND>( NULL ) ); }
+        operator HWND() const noexcept { return Handle; }
     };
 
     struct TextLabel : Control
     {
-        TextLabel( const ControlConfig& Config_ ) : Control( Config_ )
-        {
-            ClassName = WC_STATIC;
-            Style = WS_VISIBLE | WS_CHILD;
-        }
+        constexpr static LPCSTR ClassName = WC_STATIC;
+
+        TextLabel( const ControlConfig& Config_ ) : Control( Config_ ) { Style = WS_VISIBLE | WS_CHILD; }
 
         void SetText( LPCSTR NewText ) const
         {
-            // if( Handle )
-            SetWindowText( *Handle, NewText );
+            // if( Handle != NULL )
+            SetWindowText( Handle, NewText );
         }
     };
 
     struct Button : Control
     {
-        ControlAction Action;
-
-        Button( const ControlConfig& Config_, const ControlAction& Action_ ) : Control( Config_ )
-        {
-            ClassName = WC_BUTTON;
-            Style = WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON;
-            Action = Action_;
-        }
+        constexpr static LPCSTR ClassName = WC_BUTTON;
+        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style = WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON; }
     };
 
     struct Window : Control
     {
-        // std::vector<std::unique_ptr<Control>> ControlList;
-
         POINT ComponentOffset{ 10, 0 };
 
         Window( const ControlConfig& Config_ ) : Control( Config_ )
         {
-            if( ! ClassName ) ClassName = "EWUI Window Class";
+            if( ClassName == NULL ) ClassName = "EWUI Window Class";
+            if( Label == NULL ) Label = "EWUI Window Title";
 
             auto wc = WNDCLASSEX{ .cbSize = sizeof( WNDCLASSEX ),
                                   .style = CS_HREDRAW | CS_VREDRAW,
                                   .lpfnWndProc = EWUI::WndProc,
                                   .hInstance = EWUI::EntryPointParamPack.hInstance,
                                   .hbrBackground = reinterpret_cast<HBRUSH>( COLOR_WINDOW ),
-                                  .lpszClassName = *ClassName };
+                                  .lpszClassName = ClassName };
 
             if( ! RegisterClassEx( &wc ) )
             {
                 MessageBox( NULL, "Window Registration Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
-                Handle = static_cast<HWND>( NULL );
                 return;
             }
 
-            Handle = CreateWindowEx( WS_EX_LEFT, *ClassName, Label.value_or( "EWUI Window Title" ),
-                                     WS_OVERLAPPEDWINDOW | WS_TABSTOP,                    //
-                                     Origin->x, Origin->y, Dimension->cx, Dimension->cy,  //
-                                     Parent.value_or( static_cast<HWND>( NULL ) ),
-                                     Menu.value_or( static_cast<HMENU>( NULL ) ),  //
-                                     EWUI::EntryPointParamPack.hInstance, NULL );
-            if( Handle == static_cast<HWND>( NULL ) )
+            Handle = CreateWindowEx( WS_EX_LEFT, ClassName, Label,                    //
+                                     WS_OVERLAPPEDWINDOW | WS_TABSTOP,                //
+                                     Origin.x, Origin.y, Dimension.cx, Dimension.cy,  //
+                                     Parent, Menu, EWUI::EntryPointParamPack.hInstance, NULL );
+            if( Handle == NULL )
             {
                 MessageBox( NULL, "Window Creation Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
                 return;
@@ -182,9 +157,9 @@ namespace EWUI {
 
         operator int() const
         {
-            if( Handle == static_cast<HWND>( NULL ) ) return 0;
-            ShowWindow( *Handle, EWUI::EntryPointParamPack.nCmdShow );
-            UpdateWindow( *Handle );
+            if( Handle == NULL ) return 0;
+            ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
+            UpdateWindow( Handle );
             MSG Msg;
             while( GetMessage( &Msg, NULL, 0, 0 ) > 0 )
             {
@@ -198,19 +173,17 @@ namespace EWUI {
         decltype( auto ) operator<<( T&& Control_ )  //
             requires( std::is_base_of_v<Control, std::decay_t<T>> )
         {
-            Control_.Parent = *Handle;
-            if( ! Control_.Origin ) Control_.Origin = ComponentOffset;
-            ComponentOffset.y += Control_.Dimension->cy + 10;
-            Control_.Handle = CreateWindow( *Control_.ClassName,                             //
-                                            Control_.Label.value_or( "" ),                   //
-                                            Control_.Style.value_or( WS_VISIBLE ),           //
-                                            Control_.Origin->x, Control_.Origin->y,          //
-                                            Control_.Dimension->cx, Control_.Dimension->cy,  //
-                                            *Handle, Control_.Menu.value_or( static_cast<HMENU>( NULL ) ),
-                                            EWUI::EntryPointParamPack.hInstance, NULL );
+            Control_.Parent = Handle;
+            if( Control_.Origin == POINT{ 0, 0 } ) Control_.Origin = ComponentOffset;
+            ComponentOffset.y += Control_.Dimension.cy + 10;
+            Control_.Handle = CreateWindow( ControlClassName<T>,                           //
+                                            Control_.Label, Control_.Style,                //
+                                            Control_.Origin.x, Control_.Origin.y,          //
+                                            Control_.Dimension.cx, Control_.Dimension.cy,  //
+                                            Handle, Control_.Menu, EWUI::EntryPointParamPack.hInstance, NULL );
             if constexpr( std::is_same_v<Button, std::decay_t<T>> )
             {
-                ActionContainer.RegisterAction( *Control_.Handle, Control_.Action );
+                ActionContainer.RegisterAction( Control_.Handle, Control_.Action );
             }
             return *this;
         }
@@ -230,21 +203,22 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 int EWUI::Main()
 {
     auto MainWindow = Window( { .Label = "Test Window",  //
-                                .Origin = POINT{ 10, 10 },
-                                .Dimension = SIZE{ 300, 400 } } );
+                                .Origin = { 10, 10 },
+                                .Dimension = { 300, 400 } } );
 
     auto HeaderLabel = TextLabel( { .Label = "Header, Click button to change this text",  //
-                                    .Dimension = SIZE{ 400, 50 } } );
+                                    .Dimension = { 400, 50 } } );
 
-    auto ActionButton = Button( { .Label = "Click Me",  //
-                                  .Dimension = SIZE{ 200, 100 } },
-                                [ & ] { HeaderLabel.SetText( "Button Clicked." ); } );
+    auto ActionButton = Button( { .Label = "Click Me",        //
+                                  .Dimension = { 200, 100 },  //
+                                  .Action = [ & ]             //
+                                  { HeaderLabel.SetText( "Button Clicked." ); } } );
 
     return MainWindow << HeaderLabel                           //
                       << ActionButton                          //
                       << Button( { .Label = "Click Me Again",  //
-                                   .Dimension = SIZE{ 200, 120 } },
-                                 [ & ] { HeaderLabel.SetText( "Button Clicked Again." ); } );
+                                   .Dimension = { 200, 120 },  //
+                                   .Action = [ & ] { HeaderLabel.SetText( "Button Clicked Again." ); } } );
 }
 
 #endif
