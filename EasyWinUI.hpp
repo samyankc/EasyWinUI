@@ -101,25 +101,42 @@ namespace EWUI {
     struct Control : ControlConfig
     {
         operator HWND() const noexcept { return Handle; }
+        auto Width() const noexcept { return Dimension.cx; }
+        auto Height() const noexcept { return Dimension.cy; }
     };
 
     struct TextLabel : Control
     {
         constexpr static LPCSTR ClassName = WC_STATIC;
+        
+        mutable std::string InternalBuffer;
 
-        TextLabel( const ControlConfig& Config_ ) : Control( Config_ ) { Style = WS_VISIBLE | WS_CHILD; }
+        TextLabel( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= WS_VISIBLE | WS_CHILD; }
 
-        void SetText( LPCSTR NewText ) const
+        decltype( auto ) UpdateText() const
         {
-            // if( Handle != NULL )
-            SetWindowText( Handle, NewText );
+            if( Handle == NULL ) return *this;
+            SetWindowText( Handle, InternalBuffer.c_str() );
+            return *this;
+        }
+
+        decltype( auto ) operator=(auto&& NewText) const
+        {
+            InternalBuffer = NewText;
+            return UpdateText();
+        }
+        
+        decltype( auto ) operator+=(auto&& NewText) const
+        {
+            InternalBuffer += NewText;
+            return UpdateText();
         }
     };
 
     struct Button : Control
     {
         constexpr static LPCSTR ClassName = WC_BUTTON;
-        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style = WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON; }
+        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON; }
     };
 
     struct Window : Control
@@ -155,7 +172,7 @@ namespace EWUI {
             }
         }
 
-        operator int() const
+        int Activate() const
         {
             if( Handle == NULL ) return 0;
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
@@ -167,6 +184,11 @@ namespace EWUI {
                 DispatchMessage( &Msg );
             }
             return static_cast<int>( Msg.wParam );
+        }
+
+        operator int() const
+        {
+            return Activate();
         }
 
         template<typename T>
