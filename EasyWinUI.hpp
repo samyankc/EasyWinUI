@@ -100,6 +100,7 @@ namespace EWUI {
 
     struct Control : ControlConfig
     {
+        Control( const ControlConfig& Config_ ) { *this = *reinterpret_cast<const Control*>( &Config_ ); }
         operator HWND() const noexcept { return Handle; }
         auto Width() const noexcept { return Dimension.cx; }
         auto Height() const noexcept { return Dimension.cy; }
@@ -108,7 +109,7 @@ namespace EWUI {
     struct TextLabel : Control
     {
         constexpr static LPCSTR ClassName = WC_STATIC;
-        
+
         mutable std::string InternalBuffer;
 
         TextLabel( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= WS_VISIBLE | WS_CHILD; }
@@ -120,13 +121,13 @@ namespace EWUI {
             return *this;
         }
 
-        decltype( auto ) operator=(auto&& NewText) const
+        decltype( auto ) operator=( auto&& NewText ) const
         {
             InternalBuffer = NewText;
             return UpdateText();
         }
-        
-        decltype( auto ) operator+=(auto&& NewText) const
+
+        decltype( auto ) operator+=( auto&& NewText ) const
         {
             InternalBuffer += NewText;
             return UpdateText();
@@ -186,10 +187,7 @@ namespace EWUI {
             return static_cast<int>( Msg.wParam );
         }
 
-        operator int() const
-        {
-            return Activate();
-        }
+        operator int() const { return Activate(); }
 
         template<typename T>
         decltype( auto ) operator<<( T&& Control_ )  //
@@ -224,23 +222,29 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 int EWUI::Main()
 {
-    auto MainWindow = Window( { .Label = "Test Window",  //
-                                .Origin = { 10, 10 },
-                                .Dimension = { 300, 400 } } );
+    auto MainWindow = Window( {
+        .Label = "Test Window",
+        .Origin = { 10, 10 },
+        .Dimension = { 300, 400 },
+    } );
 
-    auto HeaderLabel = TextLabel( { .Label = "Header, Click button to change this text",  //
-                                    .Dimension = { 400, 50 } } );
+    auto HeaderLabel = TextLabel( {
+        .Label = "Header, Click button to change this text",
+        .Dimension = { 400, 50 },
+    } );
 
-    auto ActionButton = Button( { .Label = "Click Me",        //
-                                  .Dimension = { 200, 100 },  //
-                                  .Action = [ & ]             //
-                                  { HeaderLabel.SetText( "Button Clicked." ); } } );
+    auto ActionButton = Button( {
+        .Label = "Click Me",
+        .Dimension = { 200, 100 },
+        .Action = [ & ] { HeaderLabel = "Button Clicked."; },
+    } );
 
-    return MainWindow << HeaderLabel                           //
-                      << ActionButton                          //
-                      << Button( { .Label = "Click Me Again",  //
-                                   .Dimension = { 200, 120 },  //
-                                   .Action = [ & ] { HeaderLabel.SetText( "Button Clicked Again." ); } } );
+    return MainWindow << HeaderLabel << ActionButton
+                      << Button( {
+                             .Label = "Click Me Again",
+                             .Dimension = { 200, 120 },
+                             .Action = [ & ] { HeaderLabel = "Button Clicked Again."; },
+                         } );
 }
 
 #endif

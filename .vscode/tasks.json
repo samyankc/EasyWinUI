@@ -1,0 +1,32 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Custom Compile",
+            "command": "g++.exe",
+            "args": [
+                "-static",
+                "-O2",
+                "-march=native",
+                "-std=c++2b",
+                "-fno-exceptions",
+                "-fno-unroll-loops",
+                "-fno-rtti",
+                "-pthread",
+                "${file}",
+                "-o",
+                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
