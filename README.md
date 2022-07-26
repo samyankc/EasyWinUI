@@ -1,4 +1,5 @@
 # EasyWinUI
+# EasyWinControl
 
 ## C++ 23
 ## GCC 12.1.0
