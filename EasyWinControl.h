@@ -9,19 +9,18 @@ COLORREF colour = Control.GetColour(x,y);
 
 */
 
-#ifndef EASYCONTROL_H
-#define EASYCONTROL_H
-
+#ifndef EASYWINCONTROL_H
+#define EASYWINCONTROL_H
 
 #include <iostream>
 #include <cstring>
 #include <vector>
 #include <map>
-#include <windows.h>
+#include <Windows.h>
 #include <gdiplus.h>
 #include <string>
 #include <iomanip>
-#include <notepad.h>
+#include <EasyNotepad.h>
 
 #define SIMILARITY_THRESHOLD  20
 
@@ -32,9 +31,6 @@ COLORREF colour = Control.GetColour(x,y);
 #define IGNORE_TEXT         "0x1000000"
 #define _WwWwW_             IGNORE_COLOUR
 #define _WwWwWwW_           IGNORE_COLOUR
-
-
-using namespace std;
 
 //#define Associate(Object,Method) auto Method = std::bind_front(&decltype(Object)::Method, &Object)
 /*
@@ -51,12 +47,12 @@ void ShowHandleName(HWND hwnd)
 {
 	unsigned long long _hwnd = (unsigned long long)(hwnd);
 	auto digits = [](unsigned long long n){ for(int i=1; i<18; ++i) if ((n/=10)==0) return i; return 0; };
-	cout<<_hwnd; for (int i = 12 - digits(_hwnd); i-->0;) cout<<' ';
+	std::cout<<_hwnd; for (int i = 12 - digits(_hwnd); i-->0;) std::cout<<' ';
 
-	GetWindowText(hwnd,lpText,nMaxCount);	cout<<"[ "<<lpText<<" ] ";
-	for (int i = 25 - strlen(lpText); i-->0;) cout<<' ';
-	GetClassName(hwnd,lpText,nMaxCount);	cout<<"[ "<<lpText<<" ] ";
-	cout<<'\n';
+	GetWindowText(hwnd,lpText,nMaxCount);	std::cout<<"[ "<<lpText<<" ] ";
+	for (int i = 25 - strlen(lpText); i-->0;) std::cout<<' ';
+	GetClassName(hwnd,lpText,nMaxCount);	std::cout<<"[ "<<lpText<<" ] ";
+	std::cout<<'\n';
 }
 
 void ShowAllChild(HWND hwnd)
@@ -65,7 +61,7 @@ void ShowAllChild(HWND hwnd)
 		hwnd,
 		[]( HWND hcwnd, LPARAM lParam ) -> int
 		{
-			cout<<"\\ ";
+			std::cout<<"\\ ";
 			ShowHandleName(hcwnd);
 			return true;
 		},
@@ -87,13 +83,13 @@ constexpr WPARAM operator "" _VK(char ch)
 	return ch;
 }
 
-vector<HWND> GetWindowHandleByName(const char* name)
+std::vector<HWND> GetWindowHandleByName(const char* name)
 {
-	vector<HWND> Handles;
+	std::vector<HWND> Handles;
     Handles.reserve(4);
 
 	struct DATA{
-		vector<HWND>& Handles;
+		std::vector<HWND>& Handles;
 		const char* name;
 	} lParam{Handles,name};
 
@@ -139,7 +135,7 @@ struct ControlBitMap
 {
     Point Origin;
     Offset Dimension;
-	vector<COLORREF> Pixels;
+	std::vector<COLORREF> Pixels;
 
 	ControlBitMap IsolateColour(COLORREF KeepColour, COLORREF ColourMask = IGNORE_COLOUR, int SimilarityThreshold = SIMILARITY_THRESHOLD)
 	{
@@ -155,7 +151,7 @@ struct ControlBitMap
     {
         return Pixels[ x + y*Dimension.x() ];
     }
-    
+
     COLORREF& operator[](const Point& CheckPoint)
     {
         return Pixels[ CheckPoint.x() + CheckPoint.y()*Dimension.x() ];
@@ -164,11 +160,11 @@ struct ControlBitMap
     Point FindMonochromeBlockLocal(const ControlBitMap& MonochromeMap,const Point prelim, const Point sentinel)
     {
         if ( prelim.x() >= sentinel.x() || prelim.y() >= sentinel.y() ) return Dimension;
-        
+
         auto Match = MonochromeMap.Pixels[0];
         auto w = MonochromeMap.Dimension.x();
         auto h = MonochromeMap.Dimension.y();
-        
+
         auto BoundLeft = prelim.x();
         for ( const auto limit = prelim.x() - w + 1;
               BoundLeft --> limit &&
@@ -191,7 +187,7 @@ struct ControlBitMap
 
         Point new_prelim = { BoundLeft+w, BoundTop+h };
         Point new_sentinel = { BoundRight, BoundBottom };
-                
+
         if ( new_prelim != prelim )
             return FindMonochromeBlockLocal(MonochromeMap,new_prelim,new_sentinel); // search in shrinked region
         else
@@ -221,7 +217,7 @@ struct ControlBitMap
         auto h = MonochromeMap.Dimension.y();
 
         // disect entire region into sub regions
-        // each preliminary check point separate w-1/h-1 apart => x_n + w = x_n+1 
+        // each preliminary check point separate w-1/h-1 apart => x_n + w = x_n+1
         for (auto prelim_y=h-1; prelim_y < Dimension.y(); prelim_y += h )
             for (auto prelim_x=w-1; prelim_x < Dimension.x(); prelim_x += w )
             {
@@ -253,24 +249,24 @@ struct ControlBitMap
 			SetPixel( hdcSTDOUT, OffsetX-1+Dimension.x(), OffsetY+j, BORDER_COLOUR);
 		}
 		for (int i = 0; i < Dimension.x(); ++i) SetPixel( hdcSTDOUT, OffsetX+i, OffsetY-1+Dimension.y(), BORDER_COLOUR);
-		
+
 		ReleaseDC(hSTDOUT,hdcSTDOUT);
 	}
-	
+
 	void DisplayAt(int OffsetX, int OffsetY)
 	{
 		DisplayAt(GetConsoleWindow(),OffsetX,OffsetY);
 	}
-    
-    string Code()
+
+    std::string Code()
     {
-        ostringstream OSS;
+        std::ostringstream OSS;
         OSS<<"{";
         OSS<<"\n    {"<< Origin.x() <<","<<Origin.y()<<"}, {"<< Dimension.x() <<","<< Dimension.y() <<"},";
         OSS<<"\n    {";
         for (int pos = 0, y = 0; y < Dimension.y(); ++y)
         {
-            for (int x = 0; x < Dimension.x(); ++x, ++pos) 
+            for (int x = 0; x < Dimension.x(); ++x, ++pos)
             {
                 if ( x % Dimension.x() == 0 ) OSS<<"\n    ";
 
@@ -284,7 +280,7 @@ struct ControlBitMap
         }
         OSS<<"\n    }";
         OSS<<"\n};\n";
-        
+
         return OSS.str();
     }
 
@@ -300,7 +296,7 @@ struct ControlBitMap
 struct AcquireFocus_
 {
 	HWND LastForegroundWindow;
-	
+
 	inline void BringToForeground(HWND Handle)
 	{
 		SendMessage(Handle,WM_ACTIVATE,WA_CLICKACTIVE,0);
@@ -332,7 +328,7 @@ struct VirtualDeviceContext
         hBMP = CreateCompatibleBitmap(hdcSource,w,h);
         SelectObject(hdcDestin, hBMP);
     }
-    
+
     ~VirtualDeviceContext()
     {
 		DeleteObject(hBMP);
@@ -360,10 +356,10 @@ struct CreateControl
 
 	CreateControl(const char* WindowName, const char* ControlName)
 	{
-		vector<HWND> WindowHandles = GetWindowHandleByName( WindowName );
+		std::vector<HWND> WindowHandles = GetWindowHandleByName( WindowName );
 
 		#ifdef SHOWNAME
-			for ( auto& W : WindowHandles ) { ShowHandleName(W); ShowAllChild(W); cout<<'\n'; }
+			for ( auto& W : WindowHandles ) { ShowHandleName(W); ShowAllChild(W); std::cout<<'\n'; }
 		#endif
 
 		switch ( WindowHandles.size() )
@@ -377,14 +373,14 @@ struct CreateControl
 				break;
 			default:
 			{
-				for (int i=0; i<WindowHandles.size(); ++i) 
+				for (int i=0; i<WindowHandles.size(); ++i)
 				{
-					cout<<"["<<i<<"] ";
+					std::cout<<"["<<i<<"] ";
 					ShowHandleName(WindowHandles[i]);
 				}
-				cout<<"Pick handle: ";
-				int choice; cin>>choice;
-				cout<<"Chosen: ";
+				std::cout<<"Pick handle: ";
+				int choice; std::cin>>choice;
+				std::cout<<"Chosen: ";
 				ShowHandleName(WindowHandles[choice]);
 				Handle = FindWindowEx(WindowHandles[choice],NULL,ControlName,NULL);
 				break;
@@ -459,7 +455,7 @@ struct CreateControl
 
 			//Click(0);
 		}
-		else cout<<"\n"<<"SendMouseInput to ( 0."<< PercentX <<" full width, 0."<< PercentY <<" full height ) failed.\n";
+		else std::cout<<"\n"<<"SendMouseInput to ( 0."<< PercentX <<" full width, 0."<< PercentY <<" full height ) failed.\n";
 	}
 
 	inline void Click(int x, int y, int Repeat = 1)
@@ -470,7 +466,7 @@ struct CreateControl
 	inline void Click(Point POINT, int Repeat = 1)
     {
 		#ifdef SHOWACTION
-			cout<<"[ Click ("<<POINT.x()<<", "<<POINT.y()<<") ]"<<endl;
+			std::cout<<"[ Click ("<<POINT.x()<<", "<<POINT.y()<<") ]"<<endl;
 		#endif
 		for (int i = Repeat; i-->0;)
 		{
@@ -482,28 +478,28 @@ struct CreateControl
 	inline void Drag(Point POINT_1, Point POINT_2, bool SmoothDrag = true)
 	{
 		#ifdef SHOWACTION
-			cout<<"[ Drag ("<<POINT_1.x()<<", "<<POINT_1.y()<<")";
-			cout<<"    To ("<<POINT_2.x()<<", "<<POINT_2.y()<<") ]"<<endl;
+			std::cout<<"[ Drag ("<<POINT_1.x()<<", "<<POINT_1.y()<<")";
+			std::cout<<"    To ("<<POINT_2.x()<<", "<<POINT_2.y()<<") ]"<<endl;
 		#endif
-        
+
 		SendMessage( Handle, WM_LBUTTONDOWN, MK_LBUTTON, POINT_1 );		Sleep(ClickDelay);
-            
+
         if (SmoothDrag)
         {
             constexpr auto Displacement = 8;
-        
+
             auto IntervalCount = std::max( std::abs( ( POINT_2.x() - POINT_1.x() ) / Displacement ),  //
                                            std::abs( ( POINT_2.y() - POINT_1.y() ) / Displacement ) );
             auto Delta = Offset{ ( POINT_2.x() - POINT_1.x() ) / IntervalCount,  //
                                  ( POINT_2.y() - POINT_1.y() ) / IntervalCount };
-            
+
             auto CurrentPoint = POINT_1;
             for( auto i = 0; i < IntervalCount; ++i )
             {
                 SendMessage( Handle, WM_MOUSEMOVE, MK_LBUTTON, CurrentPoint );
                 CurrentPoint += Delta;
                 #ifdef SHOWACTION
-                cout << "    To (" << CurrentPoint.x() << ", " << CurrentPoint.y() << ")" << endl;
+                std::cout << "    To (" << CurrentPoint.x() << ", " << CurrentPoint.y() << ")" << endl;
                 #endif
                 Sleep( 10 );
             }
@@ -511,14 +507,14 @@ struct CreateControl
 		SendMessage( Handle, WM_MOUSEMOVE  , MK_LBUTTON, POINT_2 );		Sleep(ClickDelay);
 		SendMessage( Handle, WM_LBUTTONUP  , MK_LBUTTON, POINT_2 );
 	}
-	
+
 	ControlBitMap CaptureRegion(Point Origin, Offset Dimension) const
 	{
 		int x{Origin.x()}, y{Origin.y()}, w{Dimension.x()}, h{Dimension.y()};
 
 		ControlBitMap BitMap{ Origin, Dimension, {} };
 		BitMap.Pixels.reserve(w*h);
-		
+
 		HDC hdcSource = GetDC(Handle);
         auto VirtualDC = VirtualDeviceContext(hdcSource,w,h);
 
@@ -564,7 +560,7 @@ struct CreateControl
                 // }
                 // if ( !Similar( GetPixel(VirtualDC, i, j), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
 					// return false;
-                
+
                 if ( ( REJECT_COLOUR & ReferenceBitMap.Pixels[pos] ) != 0
                     == Similar( GetPixel(VirtualDC, i, j), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
                     return false;

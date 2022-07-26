@@ -1,4 +1,4 @@
-#include "EasyWinUI.hpp"
+#include <EasyWinUI.h>
 
 int EWUI::Main()
 {
