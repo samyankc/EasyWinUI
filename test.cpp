@@ -5,7 +5,7 @@ int EWUI::Main()
     auto MainWindow = Window( {
         .Label = "Test Window",
         .Origin = { 10, 10 },
-        .Dimension = { 300, 400 },
+        .Dimension = { 300, 500 },
     } );
 
     auto HeaderLabel = TextLabel( {
@@ -19,10 +19,18 @@ int EWUI::Main()
         .Action = [ & ] { HeaderLabel = "Button Clicked."; },
     } );
 
-    return MainWindow << HeaderLabel << ActionButton
+    auto InputBox = TextArea( {} );
+
+    return MainWindow << HeaderLabel   //
+                      << InputBox      //
+                      << ActionButton  //
                       << Button( {
                              .Label = "Click Me Again",
                              .Dimension = { 200, 120 },
                              .Action = [ & ] { HeaderLabel = "Button Clicked Again."; },
+                         } )
+                      << Button( {
+                             .Label = "Copy & Show Text",
+                             .Action = [ & ] { HeaderLabel = InputBox.Content(); },
                          } );
 }

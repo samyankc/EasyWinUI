@@ -30,35 +30,35 @@ namespace EWUI {
         return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
     }
 
-    struct tagActionContainer
+    struct ActionContainer_
     {
         inline static ControlAction EmptyAction = [] {};
 
-        std::vector<HWND> IndexVector;
+        std::vector<HWND> HandleVector;
         std::vector<ControlAction> ActionVector;
 
-        tagActionContainer( std::size_t capactiy )
+        ActionContainer_( std::size_t capactiy = 20 )
         {
-            IndexVector.reserve( capactiy );
+            HandleVector.reserve( capactiy );
             ActionVector.reserve( capactiy );
         }
 
         ControlAction& operator[]( HWND Index )
         {
-            auto Position = std::find( IndexVector.begin(), IndexVector.end(), Index );
-            if( Position == IndexVector.end() ) return EmptyAction;
-            return ActionVector[ Position - IndexVector.begin() ];
+            auto Position = std::find( HandleVector.begin(), HandleVector.end(), Index );
+            if( Position == HandleVector.end() ) return EmptyAction;
+            return ActionVector[ Position - HandleVector.begin() ];
         }
 
         template<typename A>
-        void RegisterAction( HWND Index_, A&& Action_ )  //
+        void RegisterAction( HWND Handle_, A&& Action_ )  //
             requires( std::is_same_v<ControlAction, std::decay_t<A>> )
         {
-            IndexVector.push_back( Index_ );
+            HandleVector.push_back( Handle_ );
             ActionVector.push_back( Action_ );
         }
 
-    } ActionContainer{ 20 };
+    } ActionContainer{};
 
     LRESULT CALLBACK WndProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
     {
@@ -73,7 +73,7 @@ namespace EWUI {
         return 0;
     }
 
-    struct tagEntryPointParamPack
+    struct EntryPointParamPack_
     {
         HINSTANCE hInstance;
         HINSTANCE hPrevInstance;
@@ -100,7 +100,11 @@ namespace EWUI {
 
     struct Control : ControlConfig
     {
-        Control( const ControlConfig& Config_ ) { *this = *reinterpret_cast<const Control*>( &Config_ ); }
+        Control( const ControlConfig& Config_ )
+        {
+            *this = *reinterpret_cast<const Control*>( &Config_ );
+            Style |= WS_VISIBLE | WS_CHILD | WS_TABSTOP;
+        }
         operator HWND() const noexcept { return Handle; }
         auto Width() const noexcept { return Dimension.cx; }
         auto Height() const noexcept { return Dimension.cy; }
@@ -112,7 +116,7 @@ namespace EWUI {
 
         mutable std::string InternalBuffer;
 
-        TextLabel( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= WS_VISIBLE | WS_CHILD; }
+        TextLabel( const ControlConfig& Config_ ) : Control( Config_ ) { Style &= ~WS_TABSTOP; }
 
         decltype( auto ) UpdateText() const
         {
@@ -137,7 +141,41 @@ namespace EWUI {
     struct Button : Control
     {
         constexpr static LPCSTR ClassName = WC_BUTTON;
-        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON; }
+        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= BS_PUSHBUTTON; }
+    };
+
+    struct EditControl : Control
+    {
+        constexpr static LPCSTR ClassName = WC_EDIT;
+
+        EditControl( const ControlConfig& Config_ ) : Control( Config_ ) {}
+
+        std::string Content()
+        {
+            if( Handle == NULL ) return "";
+            auto RequiredBufferSize = GetWindowTextLength( Handle );
+            auto ResultString = std::string{};
+            ResultString.resize( RequiredBufferSize );
+            GetWindowText( Handle, ResultString.data(), RequiredBufferSize );
+            return ResultString;
+        }
+    };
+
+    struct TextBox : EditControl
+    {
+        TextBox( const ControlConfig& Config_ ) : EditControl( Config_ )
+        {
+            Style |= ES_AUTOHSCROLL | WS_BORDER;
+            Dimension.cy = 24;
+        }
+    };
+
+    struct TextArea : EditControl
+    {
+        TextArea( const ControlConfig& Config_ ) : EditControl( Config_ )
+        {
+            Style |= WS_VSCROLL | ES_AUTOVSCROLL | ES_MULTILINE | ES_WANTRETURN;
+        }
     };
 
     struct Window : Control
@@ -149,12 +187,17 @@ namespace EWUI {
             if( ClassName == NULL ) ClassName = "EWUI Window Class";
             if( Label == NULL ) Label = "EWUI Window Title";
 
-            auto wc = WNDCLASSEX{ .cbSize = sizeof( WNDCLASSEX ),
-                                  .style = CS_HREDRAW | CS_VREDRAW,
-                                  .lpfnWndProc = EWUI::WndProc,
-                                  .hInstance = EWUI::EntryPointParamPack.hInstance,
-                                  .hbrBackground = reinterpret_cast<HBRUSH>( COLOR_WINDOW ),
-                                  .lpszClassName = ClassName };
+            Style |= WS_OVERLAPPEDWINDOW;
+            Style &= ~WS_CHILD;
+            ExStyle |= WS_EX_LEFT | WS_EX_DLGMODALFRAME;
+
+            auto wc = WNDCLASSEX{};
+            wc.cbSize = sizeof( WNDCLASSEX );
+            wc.style = CS_HREDRAW | CS_VREDRAW;
+            wc.lpfnWndProc = EWUI::WndProc;
+            wc.hInstance = EWUI::EntryPointParamPack.hInstance;
+            wc.hbrBackground = reinterpret_cast<HBRUSH>( COLOR_WINDOW );
+            wc.lpszClassName = ClassName;
 
             if( ! RegisterClassEx( &wc ) )
             {
@@ -162,8 +205,7 @@ namespace EWUI {
                 return;
             }
 
-            Handle = CreateWindowEx( WS_EX_LEFT, ClassName, Label,                    //
-                                     WS_OVERLAPPEDWINDOW | WS_TABSTOP,                //
+            Handle = CreateWindowEx( ExStyle, ClassName, Label, Style,                //
                                      Origin.x, Origin.y, Dimension.cx, Dimension.cy,  //
                                      Parent, Menu, EWUI::EntryPointParamPack.hInstance, NULL );
             if( Handle == NULL )
@@ -179,6 +221,7 @@ namespace EWUI {
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );
             MSG Msg;
+            static int msg_counter = 0;
             while( GetMessage( &Msg, NULL, 0, 0 ) > 0 )
             {
                 TranslateMessage( &Msg );
@@ -196,11 +239,12 @@ namespace EWUI {
             Control_.Parent = Handle;
             if( Control_.Origin == POINT{ 0, 0 } ) Control_.Origin = ComponentOffset;
             ComponentOffset.y += Control_.Dimension.cy + 10;
-            Control_.Handle = CreateWindow( ControlClassName<T>,                           //
-                                            Control_.Label, Control_.Style,                //
-                                            Control_.Origin.x, Control_.Origin.y,          //
-                                            Control_.Dimension.cx, Control_.Dimension.cy,  //
-                                            Handle, Control_.Menu, EWUI::EntryPointParamPack.hInstance, NULL );
+            Control_.Handle = CreateWindowEx( Control_.ExStyle,                              //
+                                              ControlClassName<T>,                           //
+                                              Control_.Label, Control_.Style,                //
+                                              Control_.Origin.x, Control_.Origin.y,          //
+                                              Control_.Dimension.cx, Control_.Dimension.cy,  //
+                                              Handle, Control_.Menu, EWUI::EntryPointParamPack.hInstance, NULL );
             if constexpr( std::is_same_v<Button, std::decay_t<T>> )
             {
                 ActionContainer.RegisterAction( Control_.Handle, Control_.Action );
