@@ -17,25 +17,24 @@
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
-// helper functions
-namespace
-{
-    template<typename T>
-        requires( std::same_as<T, SIZE> || std::same_as<T, SIZE> )
-    bool operator==( const T& LHS, const T& RHS ) { return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0; }
-}  // namespace
+namespace EWUI {
 
-namespace EWUI
-{
     int Main();
 
     using ControlAction = std::function<void()>;
+
+    template<typename T, typename = std::enable_if_t<std::is_same_v<T, SIZE> ||  //
+                                                     std::is_same_v<T, POINT>>>
+    bool operator==( const T& LHS, const T& RHS )
+    {
+        return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
+    }
 
     struct ActionContainer_
     {
         inline static ControlAction EmptyAction = [] {};
 
-        std::vector<HWND>          HandleVector;
+        std::vector<HWND> HandleVector;
         std::vector<ControlAction> ActionVector;
 
         ActionContainer_( std::size_t capactiy = 20 )
@@ -48,12 +47,12 @@ namespace EWUI
         {
             auto Position = std::find( HandleVector.begin(), HandleVector.end(), Index );
             if( Position == HandleVector.end() ) return EmptyAction;
-            return ActionVector[Position - HandleVector.begin()];
+            return ActionVector[ Position - HandleVector.begin() ];
         }
 
         template<typename A>
+        void RegisterAction( HWND Handle_, A&& Action_ )  //
             requires( std::is_same_v<ControlAction, std::decay_t<A>> )
-        void RegisterAction( HWND Handle_, A&& Action_ )
         {
             HandleVector.push_back( Handle_ );
             ActionVector.push_back( Action_ );
@@ -65,11 +64,11 @@ namespace EWUI
     {
         switch( msg )
         {
-            case WM_CREATE : break;
-            case WM_COMMAND : std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach(); break;
-            case WM_CLOSE : DestroyWindow( hwnd ); break;
-            case WM_DESTROY : PostQuitMessage( 0 ); break;
-            default : return DefWindowProc( hwnd, msg, wParam, lParam );
+            case WM_CREATE: break;
+            case WM_COMMAND: std::thread( ActionContainer[ reinterpret_cast<HWND>( lParam ) ] ).detach(); break;
+            case WM_CLOSE: DestroyWindow( hwnd ); break;
+            case WM_DESTROY: PostQuitMessage( 0 ); break;
+            default: return DefWindowProc( hwnd, msg, wParam, lParam );
         }
         return 0;
     }
@@ -78,8 +77,8 @@ namespace EWUI
     {
         HINSTANCE hInstance;
         HINSTANCE hPrevInstance;
-        LPCSTR    lpCmdLine;
-        int       nCmdShow;
+        LPCSTR lpCmdLine;
+        int nCmdShow;
     } EntryPointParamPack{};
 
     template<typename T>
@@ -87,15 +86,15 @@ namespace EWUI
 
     struct ControlConfig
     {
-        HWND          Handle{};
-        HWND          Parent{};
-        HMENU         Menu{};
-        LPCSTR        ClassName{};
-        LPCSTR        Label{};
-        DWORD         Style{};
-        DWORD         ExStyle{};
-        POINT         Origin{ 0, 0 };
-        SIZE          Dimension{ 200, 100 };
+        HWND Handle{};
+        HWND Parent{};
+        HMENU Menu{};
+        LPCSTR ClassName{};
+        LPCSTR Label{};
+        DWORD Style{};
+        DWORD ExStyle{};
+        POINT Origin{ 0, 0 };
+        SIZE Dimension{ 200, 100 };
         ControlAction Action{};
     } MainWindowConfig{};
 
@@ -106,11 +105,8 @@ namespace EWUI
             *this = *reinterpret_cast<const Control*>( &Config_ );
             Style |= WS_VISIBLE | WS_CHILD | WS_TABSTOP;
         }
-
         operator HWND() const noexcept { return Handle; }
-
         auto Width() const noexcept { return Dimension.cx; }
-
         auto Height() const noexcept { return Dimension.cy; }
     };
 
@@ -145,7 +141,6 @@ namespace EWUI
     struct Button : Control
     {
         constexpr static LPCSTR ClassName = WC_BUTTON;
-
         Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= BS_PUSHBUTTON; }
     };
 
@@ -225,7 +220,7 @@ namespace EWUI
             if( Handle == NULL ) return 0;
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );
-            MSG        Msg;
+            MSG Msg;
             static int msg_counter = 0;
             while( GetMessage( &Msg, NULL, 0, 0 ) > 0 )
             {
@@ -238,8 +233,8 @@ namespace EWUI
         operator int() const { return Activate(); }
 
         template<typename T>
+        decltype( auto ) operator<<( T&& Control_ )  //
             requires( std::is_base_of_v<Control, std::decay_t<T>> )
-        decltype( auto ) operator<<( T&& Control_ )
         {
             Control_.Parent = Handle;
             if( Control_.Origin == POINT{ 0, 0 } ) Control_.Origin = ComponentOffset;
@@ -273,27 +268,27 @@ int EWUI::Main()
 {
     auto MainWindow = Window( {
         .Label = "Test Window",
-        .Origin = { 10,  10},
-        .Dimension = {300, 400},
+        .Origin = { 10, 10 },
+        .Dimension = { 300, 400 },
     } );
 
     auto HeaderLabel = TextLabel( {
         .Label = "Header, Click button to change this text",
-        .Dimension = {400, 50},
+        .Dimension = { 400, 50 },
     } );
 
     auto ActionButton = Button( {
         .Label = "Click Me",
-        .Dimension = {200, 100 },
-        .Action = [&] { HeaderLabel = "Button Clicked.";     },
+        .Dimension = { 200, 100 },
+        .Action = [ & ] { HeaderLabel = "Button Clicked."; },
     } );
 
     return MainWindow << HeaderLabel << ActionButton
                       << Button( {
                              .Label = "Click Me Again",
-                             .Dimension = {200, 120 },
-                             .Action = [&] { HeaderLabel = "Button Clicked Again.";     },
-    } );
+                             .Dimension = { 200, 120 },
+                             .Action = [ & ] { HeaderLabel = "Button Clicked Again."; },
+                         } );
 }
 
 #endif
