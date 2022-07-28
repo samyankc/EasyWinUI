@@ -28,9 +28,5 @@ int EWUI::Main()
                              .Label = "Click Me Again",
                              .Dimension = { 200, 120 },
                              .Action = [ & ] { HeaderLabel = "Button Clicked Again."; },
-                         } )
-                      << Button( {
-                             .Label = "Copy & Show Text",
-                             .Action = [ & ] { HeaderLabel = InputBox.Content(); },
                          } );
 }

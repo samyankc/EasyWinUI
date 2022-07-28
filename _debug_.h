@@ -38,13 +38,18 @@ namespace
         putchar( '\n' );
     }
 
+
 }  // namespace
 
-template<typename Type>
-void TypeOf( Type&& )
-{
-    return +[/* Read Error Message */] {};
-}
+struct TypeOf{
+    template<typename Type>
+    void operator,( Type&& )
+    {
+        return +[/* Read Error Message */] {};
+    }
+};
+#define Use_this_operator_to_check_object_type TypeOf{},
+#define TypeOf Use_this_operator_to_check_object_type
 
 #ifdef TEST_CODE
 #include <vector>

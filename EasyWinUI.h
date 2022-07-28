@@ -21,7 +21,7 @@
 namespace
 {
     template<typename T>
-        requires( std::same_as<T, SIZE> || std::same_as<T, SIZE> )
+        requires( std::same_as<T, SIZE> || std::same_as<T, POINT> )
     bool operator==( const T& LHS, const T& RHS ) { return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0; }
 }  // namespace
 
@@ -61,8 +61,13 @@ namespace EWUI
 
     } ActionContainer{};
 
+
+
     LRESULT CALLBACK WndProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
     {
+
+        std::cout<< msg <<"\t" << HIWORD(wParam) <<"\t"<<LOWORD(wParam)<< "\t"<<lParam << std::endl;
+
         switch( msg )
         {
             case WM_CREATE : break;
