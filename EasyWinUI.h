@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <vector>
 #include <string>
@@ -17,12 +18,38 @@
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
-// helper functions
+// helpers
 namespace
 {
-    template<typename T>
-        requires( std::same_as<T, SIZE> || std::same_as<T, POINT> )
-    bool operator==( const T& LHS, const T& RHS ) { return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0; }
+    template<typename Derived, typename Base>
+    concept DerivedFrom = std::is_base_of_v<Base, std::decay_t<Derived>>;
+
+    template<typename TargetType, typename... CandidateTypes>
+    concept MatchExactType = ( std::same_as<TargetType, CandidateTypes> || ... );
+
+    template<typename TargetType, typename... CandidateTypes>
+    concept MatchType = MatchExactType<std::decay_t<TargetType>, std::decay_t<CandidateTypes>...>;
+
+    template<MatchType<SIZE, POINT> T>
+    bool operator==( const T& LHS, const T& RHS )
+    {
+        return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
+    }
+
+
+    HWND MonitorHandle = NULL;
+
+    void PrintMSG( std::string_view PrefixString, MSG Msg )
+    {
+        if( MonitorHandle == NULL || Msg.hwnd != MonitorHandle ) return;
+        auto w10 = std::setw( 12 );
+        auto w5 = std::setw( 5 );
+        std::cout << PrefixString << '\t' << w10 << Msg.message                                       //
+                  << w10 << Msg.wParam << w10 << HIWORD( Msg.wParam ) << w10 << LOWORD( Msg.wParam )  //
+                  << w10 << Msg.lParam << w10 << HIWORD( Msg.lParam ) << w10 << LOWORD( Msg.lParam )  //
+                  << std::endl;
+    }
+
 }  // namespace
 
 namespace EWUI
@@ -30,7 +57,6 @@ namespace EWUI
     int Main();
 
     using ControlAction = std::function<void()>;
-
     struct ActionContainer_
     {
         inline static ControlAction EmptyAction = [] {};
@@ -51,10 +77,9 @@ namespace EWUI
             return ActionVector[Position - HandleVector.begin()];
         }
 
-        template<typename A>
-            requires( std::is_same_v<ControlAction, std::decay_t<A>> )
-        void RegisterAction( HWND Handle_, A&& Action_ )
+        void RegisterAction( HWND Handle_, MatchType<ControlAction> auto&& Action_ )
         {
+            if( Action_ == nullptr ) return;
             HandleVector.push_back( Handle_ );
             ActionVector.push_back( Action_ );
         }
@@ -62,12 +87,8 @@ namespace EWUI
     } ActionContainer{};
 
 
-
     LRESULT CALLBACK WndProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
     {
-
-        std::cout<< msg <<"\t" << HIWORD(wParam) <<"\t"<<LOWORD(wParam)<< "\t"<<lParam << std::endl;
-
         switch( msg )
         {
             case WM_CREATE : break;
@@ -151,7 +172,7 @@ namespace EWUI
     {
         constexpr static LPCSTR ClassName = WC_BUTTON;
 
-        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= BS_PUSHBUTTON; }
+        Button( const ControlConfig& Config_ ) : Control( Config_ ) { Style |= BS_PUSHBUTTON | BS_FLAT; }
     };
 
     struct EditControl : Control
@@ -234,16 +255,19 @@ namespace EWUI
             static int msg_counter = 0;
             while( GetMessage( &Msg, NULL, 0, 0 ) > 0 )
             {
-                TranslateMessage( &Msg );
-                DispatchMessage( &Msg );
+                PrintMSG( "Before IsDialogMessage", Msg );
+                if( ! IsDialogMessage( Handle, &Msg ) )
+                {
+                    TranslateMessage( &Msg );
+                    DispatchMessage( &Msg );
+                }
             }
             return static_cast<int>( Msg.wParam );
         }
 
         operator int() const { return Activate(); }
 
-        template<typename T>
-            requires( std::is_base_of_v<Control, std::decay_t<T>> )
+        template<DerivedFrom<Control> T>
         decltype( auto ) operator<<( T&& Control_ )
         {
             Control_.Parent = Handle;
@@ -255,10 +279,12 @@ namespace EWUI
                                               Control_.Origin.x, Control_.Origin.y,          //
                                               Control_.Dimension.cx, Control_.Dimension.cy,  //
                                               Handle, Control_.Menu, EWUI::EntryPointParamPack.hInstance, NULL );
-            if constexpr( std::is_same_v<Button, std::decay_t<T>> )
+            if constexpr( MatchType<T, Button, TextBox> )
             {
                 ActionContainer.RegisterAction( Control_.Handle, Control_.Action );
             }
+
+
             return *this;
         }
     };
@@ -278,27 +304,27 @@ int EWUI::Main()
 {
     auto MainWindow = Window( {
         .Label = "Test Window",
-        .Origin = { 10,  10},
-        .Dimension = {300, 400},
+        .Origin = { 10, 10 },
+        .Dimension = { 300, 400 },
     } );
 
     auto HeaderLabel = TextLabel( {
         .Label = "Header, Click button to change this text",
-        .Dimension = {400, 50},
+        .Dimension = { 400, 50 },
     } );
 
     auto ActionButton = Button( {
         .Label = "Click Me",
-        .Dimension = {200, 100 },
-        .Action = [&] { HeaderLabel = "Button Clicked.";     },
+        .Dimension = { 200, 100 },
+        .Action = [&] { HeaderLabel = "Button Clicked."; },
     } );
 
     return MainWindow << HeaderLabel << ActionButton
                       << Button( {
                              .Label = "Click Me Again",
-                             .Dimension = {200, 120 },
-                             .Action = [&] { HeaderLabel = "Button Clicked Again.";     },
-    } );
+                             .Dimension = { 200, 120 },
+                             .Action = [&] { HeaderLabel = "Button Clicked Again."; },
+                         } );
 }
 
 #endif

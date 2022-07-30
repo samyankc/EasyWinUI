@@ -16,17 +16,27 @@ int EWUI::Main()
     auto ActionButton = Button( {
         .Label = "Click Me",
         .Dimension = { 200, 100 },
-        .Action = [ & ] { HeaderLabel = "Button Clicked."; },
+        .Action = [&] { HeaderLabel = "Button Clicked."; },
     } );
 
-    auto InputBox = TextArea( {} );
+    auto InputBox = TextBox( {} );
 
-    return MainWindow << HeaderLabel   //
-                      << InputBox      //
-                      << ActionButton  //
-                      << Button( {
-                             .Label = "Click Me Again",
-                             .Dimension = { 200, 120 },
-                             .Action = [ & ] { HeaderLabel = "Button Clicked Again."; },
-                         } );
+    auto InputArea = TextArea( {
+        .Label = "???",
+        .Dimension = { 200, 100 },
+    } );
+
+
+    MainWindow << HeaderLabel   //
+               << InputBox      //
+               << InputArea     //
+               << ActionButton  //
+               << Button( {
+                      .Label = "Click Me Again",
+                      .Dimension = { 200, 120 },
+                      .Action = [&] { HeaderLabel = "Button Clicked Again."; },
+                  } );
+
+    MonitorHandle = ActionButton;
+    return MainWindow;
 }
