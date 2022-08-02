@@ -19,24 +19,40 @@ int EWUI::Main()
         .Action = [&] { HeaderLabel = "Button Clicked."; },
     } );
 
-    auto InputBox = TextBox( {} );
+    auto InputBox1 = TextBox( {} );
+    auto InputBox2 = TextBox( {} );
 
-    auto InputArea = TextArea( {
-        .Label = "???",
-        .Dimension = { 200, 100 },
+    auto InputArea = TextArea( { .Dimension = { 200, 100 } } );
+
+    auto PopupWindow1 = PopupWindow( {
+        .Dimension = { 300, 400 },
     } );
 
 
+    auto PopupButton1 = Button( {
+        .Label = "Popup",
+        .Action =
+            [&] {
+
+            },
+    } );
+
     MainWindow << HeaderLabel   //
-               << InputBox      //
-               << InputArea     //
+               << InputBox1     //
+               << InputBox2     //
                << ActionButton  //
                << Button( {
                       .Label = "Click Me Again",
                       .Dimension = { 200, 120 },
                       .Action = [&] { HeaderLabel = "Button Clicked Again."; },
-                  } );
+                  } )
+               << PopupWindow1;
 
-    MonitorHandle = ActionButton;
+    PopupWindow1 << Button( {
+        .Label = "test",
+        .Action = [&] { InputBox1 = " hi"; },
+    } );
+    //MonitorHandle = InputBox1;
+
     return MainWindow;
 }
