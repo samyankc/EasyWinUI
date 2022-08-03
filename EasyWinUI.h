@@ -119,10 +119,13 @@ namespace EWUI
         {
             case WM_CREATE : break;
             case WM_COMMAND : std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach(); break;
-            case WM_CLOSE : DestroyWindow( hwnd ); break;
-            case WM_DESTROY :
-                if( GetWindow( hwnd, GW_OWNER ) == NULL ) PostQuitMessage( 0 );
+            case WM_CLOSE :
+                if( GetWindow( hwnd, GW_OWNER ) == NULL )
+                    DestroyWindow( hwnd );
+                else
+                    ShowWindow( hwnd, SW_HIDE );
                 break;
+            case WM_DESTROY : PostQuitMessage( 0 ); break;
             default : return DefWindowProc( hwnd, msg, wParam, lParam );
         }
         return 0;
@@ -227,22 +230,17 @@ namespace EWUI
 
     struct TextBox : EditControl
     {
+        using EditControl::operator=;
         TextBox( const ControlConfig& Config_ ) : EditControl( Config_ )
         {
             Style |= ES_AUTOHSCROLL | WS_BORDER;
             Dimension.cy = 24;
         }
-
-        using EditControl::operator=;
-        // void operator=( auto&& IncomingContent_ )
-        // {
-        //     auto IncomingContent = std::string_view{ IncomingContent_ };
-        //     SetWindowText( Handle, IncomingContent.data() );
-        // }
     };
 
     struct TextArea : EditControl
     {
+        using EditControl::operator=;
         TextArea( const ControlConfig& Config_ ) : EditControl( Config_ )
         {
             Style |= WS_VSCROLL | ES_AUTOVSCROLL | ES_MULTILINE | ES_WANTRETURN;
@@ -253,6 +251,8 @@ namespace EWUI
     struct WindowControl : Control
     {
         POINT ComponentOffset{ 10, 0 };
+        // PAINTSTRUCT ps;
+        // HDC hdc;
 
         WindowControl( const ControlConfig& Config_, LPCSTR FallbackClassName, LPCSTR FallbackLabel )
             : Control( Config_ )
@@ -260,8 +260,9 @@ namespace EWUI
             if( ClassName == NULL ) ClassName = FallbackClassName;
             if( Label == NULL ) Label = FallbackLabel;
 
-            Style |= WS_OVERLAPPEDWINDOW;
             Style &= ~WS_CHILD;
+            Style &= ~WS_VISIBLE;
+            Style |= WS_OVERLAPPEDWINDOW;
             ExStyle |= WS_EX_LEFT | WS_EX_DLGMODALFRAME;  // | WS_EX_LAYERED
 
             auto wc = WNDCLASSEX{};
@@ -278,14 +279,64 @@ namespace EWUI
                 return;
             }
 
-            // Handle = CreateWindowEx( ExStyle, ClassName, Label, Style,                //
-            //                          Origin.x, Origin.y, Dimension.cx, Dimension.cy,  //
-            //                          Parent, Menu, EWUI::EntryPointParamPack.hInstance, NULL );
-            // if( Handle == NULL )
-            // {
-            //     MessageBox( NULL, "Window Creation Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
-            //     return;
-            // }
+            Handle = CreateWindowEx( ExStyle, ClassName, Label, Style,                //
+                                     Origin.x, Origin.y, Dimension.cx, Dimension.cy,  //
+                                     Parent, Menu, EWUI::EntryPointParamPack.hInstance, NULL );
+            if( Handle == NULL )
+            {
+                MessageBox( NULL, "Window Creation Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
+                return;
+            }
+        }
+
+        template<DerivedFrom<Control> T>
+        decltype( auto ) operator<<( T&& Child_ )
+        {
+            if( Handle == NULL ) return *this;
+
+            Child_.Parent = Handle;
+            if( Child_.Handle == NULL )
+            {
+                if( Child_.Origin == POINT{ 0, 0 } ) Child_.Origin = ComponentOffset;
+                ComponentOffset.y += Child_.Dimension.cy + 10;
+                Child_.Handle = CreateWindowEx( Child_.ExStyle,                            //
+                                                Child_.ClassName,                          //
+                                                Child_.Label, Child_.Style,                //
+                                                Child_.Origin.x, Child_.Origin.y,          //
+                                                Child_.Dimension.cx, Child_.Dimension.cy,  //
+                                                Child_.Parent, Child_.Menu, EWUI::EntryPointParamPack.hInstance, NULL );
+                if constexpr( MatchType<T, Button, TextBox> )
+                {
+                    ActionContainer.RegisterAction( Child_.Handle, Child_.Action );
+                }
+            }
+            else
+            {
+                // Change Owner by SetWindowLongPtr( __ , GWLP_HWNDPARENT, __ )
+                // SetParent() has different effect
+                SetWindowLongPtr( Child_.Handle, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(Child_.Parent) );
+            }
+            return *this;
+        }
+
+        void Show() { ShowWindow( Handle, SW_SHOW ); }
+
+        void Hide() { ShowWindow( Handle, SW_HIDE ); }
+
+        void ToggleVisibility()
+        {
+            if( GetWindowLong( Handle, GWL_STYLE ) & WS_VISIBLE )
+                Hide();
+            else
+                Show();
+        }
+    };
+
+    struct Window : WindowControl
+    {
+        Window( const ControlConfig& Config_ ) : WindowControl( Config_, "EWUI Window Class", "EWUI Window Title" )
+        {
+            Show();
         }
 
         int Activate() const
@@ -317,47 +368,6 @@ namespace EWUI
         }
 
         operator int() const { return Activate(); }
-
-        template<DerivedFrom<Control> T>
-        decltype( auto ) operator<<( T&& Control_ )
-        {
-            struct PopupWindow;
-            if constexpr( MatchType<T, PopupWindow> )
-            {
-                return *this;
-            }
-
-            Control_.Parent = Handle;
-            if( Control_.Origin == POINT{ 0, 0 } ) Control_.Origin = ComponentOffset;
-            ComponentOffset.y += Control_.Dimension.cy + 10;
-            Control_.Handle =
-                CreateWindowEx( Control_.ExStyle,                              //
-                                Control_.ClassName,                            //
-                                Control_.Label, Control_.Style,                //
-                                Control_.Origin.x, Control_.Origin.y,          //
-                                Control_.Dimension.cx, Control_.Dimension.cy,  //
-                                Control_.Parent, Control_.Menu, EWUI::EntryPointParamPack.hInstance, NULL );
-            if constexpr( MatchType<T, Button, TextBox> )
-            {
-                ActionContainer.RegisterAction( Control_.Handle, Control_.Action );
-            }
-            return *this;
-        }
-    };
-
-    struct Window : WindowControl
-    {
-        Window( const ControlConfig& Config_ ) : WindowControl( Config_, "EWUI Window Class", "EWUI Window Title" )
-        {
-            Handle = CreateWindowEx( ExStyle, ClassName, Label, Style,                //
-                                     Origin.x, Origin.y, Dimension.cx, Dimension.cy,  //
-                                     Parent, Menu, EWUI::EntryPointParamPack.hInstance, NULL );
-            if( Handle == NULL )
-            {
-                MessageBox( NULL, "Window Creation Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
-                return;
-            }
-        }
     };
 
     struct PopupWindow : WindowControl

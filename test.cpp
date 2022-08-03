@@ -1,11 +1,12 @@
 #include <EasyWinUI.h>
+#include <EasyWinControl.h>
 
 int EWUI::Main()
 {
     auto MainWindow = Window( {
         .Label = "Test Window",
         .Origin = { 10, 10 },
-        .Dimension = { 300, 500 },
+        .Dimension = { 300, 600 },
     } );
 
     auto HeaderLabel = TextLabel( {
@@ -25,17 +26,20 @@ int EWUI::Main()
     auto InputArea = TextArea( { .Dimension = { 200, 100 } } );
 
     auto PopupWindow1 = PopupWindow( {
-        .Dimension = { 300, 400 },
+        .Dimension = { 300, 500 },
     } );
 
 
-    auto PopupButton1 = Button( {
-        .Label = "Popup",
-        .Action =
-            [&] {
-
-            },
-    } );
+    PopupWindow1 << TextLabel( { .Dimension = { 10, 300 } } )  //
+                 << Button( {
+                        .Label = "test",
+                        .Action =
+                            [&] {
+                                auto MyControl = CreateControl( "LDPlayerMainFrame", "RenderWindow" );
+                                auto Pic = MyControl.CaptureRegion( { 20, 20 }, { 100, 200 } );
+                                Pic.DisplayAt( PopupWindow1, 1, 1 );
+                            },
+                    } );
 
     MainWindow << HeaderLabel   //
                << InputBox1     //
@@ -46,12 +50,13 @@ int EWUI::Main()
                       .Dimension = { 200, 120 },
                       .Action = [&] { HeaderLabel = "Button Clicked Again."; },
                   } )
-               << PopupWindow1;
+               << Button( {
+                      .Label = "Popup",
+                      .Action = [&] { PopupWindow1.ToggleVisibility(); },
+                  } );
 
-    PopupWindow1 << Button( {
-        .Label = "test",
-        .Action = [&] { InputBox1 = " hi"; },
-    } );
+    MainWindow << PopupWindow1;
+
     //MonitorHandle = InputBox1;
 
     return MainWindow;

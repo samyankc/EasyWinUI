@@ -24,11 +24,14 @@ COLORREF colour = Control.GetColour(x,y);
 
 #define SIMILARITY_THRESHOLD 20
 
+#define STRINGIFY_IMPL(s) #s
+#define STRINGIFY(s) STRINGIFY_IMPL(s)
+
 #define IGNORE_COLOUR 0x1000000
 #define REJECT_COLOUR 0x2000000  // EXCLUDE_COLOUR | 0xBBGGRR  ==>  all colours allowed except 0xBBGGRR ( exact match )
 
 //#define IGNORE_TEXT         "_WwWwWwW_"
-#define IGNORE_TEXT "0x1000000"
+#define IGNORE_TEXT STRINGIFY(IGNORE_COLOUR)
 #define _WwWwW_     IGNORE_COLOUR
 #define _WwWwWwW_   IGNORE_COLOUR
 
@@ -236,7 +239,7 @@ struct ControlBitMap
 
     void DisplayAt( HWND hSTDOUT, int OffsetX, int OffsetY )
     {
-#define BORDER_COLOUR 0xFF
+        constexpr auto BORDER_COLOUR = 0xFF;
         if( hSTDOUT == NULL ) hSTDOUT = GetConsoleWindow();
         HDC hdcSTDOUT = GetDC( hSTDOUT );
 
