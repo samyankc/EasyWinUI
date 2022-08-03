@@ -48,7 +48,7 @@ char lpText[ nMaxCount ];
 
 void ShowHandleName( HWND hwnd )
 {
-    unsigned long long _hwnd = (unsigned long long)( hwnd );
+    auto _hwnd = reinterpret_cast<unsigned long long>( hwnd );
     auto digits = []( unsigned long long n ) {
         for( int i = 1; i < 18; ++i )
             if( ( n /= 10 ) == 0 ) return i;
@@ -103,10 +103,10 @@ std::vector<HWND> GetWindowHandleByName( const char* name )
     } lParam{ Handles, name };
 
     EnumWindows(
-        []( HWND hwnd, LPARAM lParam ) -> int {
-            DATA* lParam_ptr = reinterpret_cast<DATA*>( lParam );
-            GetClassName( hwnd, lpText, nMaxCount );
-            if( strstr( lpText, lParam_ptr->name ) != NULL ) lParam_ptr->Handles.push_back( hwnd );
+        []( HWND hwnd_, LPARAM lParam_ ) -> int {
+            DATA* lParam_ptr = reinterpret_cast<DATA*>( lParam_ );
+            GetClassName( hwnd_, lpText, nMaxCount );
+            if( strstr( lpText, lParam_ptr->name ) != NULL ) lParam_ptr->Handles.push_back( hwnd_ );
             return true;
         },
         reinterpret_cast<LPARAM>( &lParam ) );
@@ -372,7 +372,7 @@ struct CreateControl
                 if( Handle == NULL ) Handle = WindowHandles[ 0 ];
                 break;
             default: {
-                for( int i = 0; i < WindowHandles.size(); ++i )
+                for( std::size_t i = 0; i < WindowHandles.size(); ++i )
                 {
                     std::cout << "[" << i << "] ";
                     ShowHandleName( WindowHandles[ i ] );
@@ -404,7 +404,7 @@ struct CreateControl
         Sleep( KeyDelay );
     }
 
-    inline void SendText( const char* Text ) { SendMessage( Handle, WM_SETTEXT, 0, (LPARAM)Text ); }
+    inline void SendText( const char* Text ) { SendMessage( Handle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(Text) ); }
 
     Offset GetClientDimension()
     {
@@ -459,16 +459,16 @@ struct CreateControl
 
     inline void Click( int x, int y, int Repeat = 1 ) { Click( { x, y }, Repeat ); }
 
-    inline void Click( Point POINT, int Repeat = 1 )
+    inline void Click( Point POINT_, int Repeat = 1 )
     {
 #ifdef SHOWACTION
         std::cout << "[ Click (" << POINT.x() << ", " << POINT.y() << ") ]" << endl;
 #endif
         for( int i = Repeat; i-- > 0; )
         {
-            SendMessage( Handle, WM_LBUTTONDOWN, MK_LBUTTON, POINT );
+            SendMessage( Handle, WM_LBUTTONDOWN, MK_LBUTTON, POINT_ );
             Sleep( ClickDuration );
-            SendMessage( Handle, WM_LBUTTONUP, MK_LBUTTON, POINT );
+            SendMessage( Handle, WM_LBUTTONUP, MK_LBUTTON, POINT_ );
             Sleep( ClickDelay );
         }
     }
@@ -551,14 +551,14 @@ struct CreateControl
                 // if ( !Similar( GetPixel(VirtualDC, i, j), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
                 // return false;
 
-                if( ( REJECT_COLOUR & ReferenceBitMap.Pixels[ pos ] ) != 0 ==
+                if( (( REJECT_COLOUR & ReferenceBitMap.Pixels[ pos ] ) != 0 ) ==
                     Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[ pos ], SimilarityThreshold ) )
                     return false;
             }
         return true;
     }
 
-    inline COLORREF GetColour( Point POINT ) { return CaptureRegion( POINT, { 1, 1 } ).Pixels[ 0 ]; }
+    inline COLORREF GetColour( Point POINT_ ) { return CaptureRegion( POINT_, { 1, 1 } ).Pixels[ 0 ]; }
 
     inline COLORREF GetColour( int x, int y ) { return GetColour( { x, y } ); }
 

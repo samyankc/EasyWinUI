@@ -163,9 +163,34 @@ namespace EWUI
 
         operator HWND() const noexcept { return Handle; }
 
-        auto Width() const noexcept { return Dimension.cx; }
+        auto GetRect() const noexcept
+        {
+            RECT rect;
+            GetWindowRect( Handle, &rect );
+            return rect;
+        }
 
-        auto Height() const noexcept { return Dimension.cy; }
+        auto Width() const noexcept
+        {
+            auto rect = GetRect();
+            return rect.right - rect.left;
+        }
+
+        auto Height() const noexcept
+        {
+            auto rect = GetRect();
+            return rect.bottom - rect.top;
+        }
+
+        auto ReSize( SIZE NewDimension ) const noexcept
+        {
+            SetWindowPos( Handle, HWND_NOTOPMOST, 0, 0, NewDimension.cx, NewDimension.cy, SWP_NOMOVE | SWP_NOZORDER );
+        }
+
+        auto MoveTo( POINT NewPoint ) const noexcept
+        {
+            SetWindowPos( Handle, HWND_NOTOPMOST, NewPoint.x, NewPoint.y, 0, 0, SWP_NOSIZE | SWP_NOZORDER );
+        }
     };
 
     struct TextLabel : Control
@@ -251,6 +276,7 @@ namespace EWUI
     struct WindowControl : Control
     {
         POINT ComponentOffset{ 10, 0 };
+        SIZE  ComponentTotalSize{ 0, 0 };
         // PAINTSTRUCT ps;
         // HDC hdc;
 
@@ -299,6 +325,8 @@ namespace EWUI
             {
                 if( Child_.Origin == POINT{ 0, 0 } ) Child_.Origin = ComponentOffset;
                 ComponentOffset.y += Child_.Dimension.cy + 10;
+                ComponentTotalSize.cy = ComponentOffset.y;
+                ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, Child_.Origin.x + Child_.Dimension.cx );
                 Child_.Handle = CreateWindowEx( Child_.ExStyle,                            //
                                                 Child_.ClassName,                          //
                                                 Child_.Label, Child_.Style,                //
@@ -314,7 +342,7 @@ namespace EWUI
             {
                 // Change Owner by SetWindowLongPtr( __ , GWLP_HWNDPARENT, __ )
                 // SetParent() has different effect
-                SetWindowLongPtr( Child_.Handle, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(Child_.Parent) );
+                SetWindowLongPtr( Child_.Handle, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>( Child_.Parent ) );
             }
             return *this;
         }
@@ -342,6 +370,13 @@ namespace EWUI
         int Activate() const
         {
             if( Handle == NULL ) return 0;
+
+            if( Dimension.cx == -1 && Dimension.cy == -1 )
+            {
+                // buffer space for title bar
+                ReSize( { ComponentTotalSize.cx, ComponentTotalSize.cy + 40 } );
+            }
+
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );
 

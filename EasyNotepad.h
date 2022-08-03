@@ -17,7 +17,7 @@ struct Notepad_
         const char* EditName;
         LRESULT ( *SendMessageProxy )( HWND, UINT, WPARAM, LPARAM ){ SendMessage };
         HWND AppHandle{ NULL };
-        PROCESS_INFORMATION ProcessInfo;
+        PROCESS_INFORMATION ProcessInfo{};
 
         auto& operator<<( const std::string& IncomingText )
         {
@@ -46,11 +46,12 @@ struct Notepad_
 
             if( IsWindow( AppHandle ) )
             {
-                size_t NewTextLength = SendMessage( AppHandle, WM_GETTEXTLENGTH, 0, 0 ) + IncomingText.length() + 1;
-                char NewText[ NewTextLength ];
-                LRESULT JumpStartIndex = SendMessage( AppHandle, WM_GETTEXT, NewTextLength, (LPARAM)NewText );
-                memcpy( &NewText[ JumpStartIndex ], IncomingText.data(), IncomingText.length() + 1 );
-                SendMessageProxy( AppHandle, WM_SETTEXT, 0, (LPARAM)NewText );
+                auto NewTextLength = SendMessage( AppHandle, WM_GETTEXTLENGTH, 0, 0 ) + IncomingText.length() + 1;
+                auto NewText = std::string{};
+                NewText.resize(NewTextLength);
+                LRESULT JumpStartIndex = SendMessage( AppHandle, WM_GETTEXT, NewTextLength, reinterpret_cast<LPARAM>(NewText.data()) );
+                memcpy( NewText.data() + JumpStartIndex, IncomingText.data(), IncomingText.length() + 1 );
+                SendMessageProxy( AppHandle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(NewText.data()) );
             }
             else
                 std::cout << IncomingText;

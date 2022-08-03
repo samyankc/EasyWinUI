@@ -6,7 +6,7 @@ int EWUI::Main()
     auto MainWindow = Window( {
         .Label = "Test Window",
         .Origin = { 10, 10 },
-        .Dimension = { 300, 600 },
+        .Dimension = { -1, -1 },
     } );
 
     auto HeaderLabel = TextLabel( {
@@ -26,7 +26,7 @@ int EWUI::Main()
     auto InputArea = TextArea( { .Dimension = { 200, 100 } } );
 
     auto PopupWindow1 = PopupWindow( {
-        .Dimension = { 300, 500 },
+        .Dimension = { 300, 600 },
     } );
 
 
@@ -52,7 +52,11 @@ int EWUI::Main()
                   } )
                << Button( {
                       .Label = "Popup",
-                      .Action = [&] { PopupWindow1.ToggleVisibility(); },
+                      .Action =
+                          [&] {
+                              PopupWindow1.ToggleVisibility();
+                              Notepad.exe << InputBox1.Content() << "\n" << InputBox2.Content() << "\n";
+                          },
                   } );
 
     MainWindow << PopupWindow1;
