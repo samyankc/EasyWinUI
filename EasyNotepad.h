@@ -47,8 +47,7 @@ struct Notepad_
             if( IsWindow( AppHandle ) )
             {
                 auto NewTextLength = SendMessage( AppHandle, WM_GETTEXTLENGTH, 0, 0 ) + IncomingText.length() + 1;
-                auto NewText = std::string{};
-                NewText.resize(NewTextLength);
+                auto NewText = std::string(NewTextLength,'\0');
                 LRESULT JumpStartIndex = SendMessage( AppHandle, WM_GETTEXT, NewTextLength, reinterpret_cast<LPARAM>(NewText.data()) );
                 memcpy( NewText.data() + JumpStartIndex, IncomingText.data(), IncomingText.length() + 1 );
                 SendMessageProxy( AppHandle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(NewText.data()) );
