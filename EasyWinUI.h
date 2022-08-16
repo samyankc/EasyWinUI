@@ -215,6 +215,9 @@ namespace EWUI
 
         auto Width() const noexcept
         {
+            return Dimension().cx;
+
+
             auto rect = GetRect();
             return rect.right - rect.left;
         }
@@ -310,10 +313,7 @@ namespace EWUI
     struct TextBox : EditControl<TextBox>
     {
         using EditControl::operator=;
-        TextBox()
-        {
-            this->AddStyle( ES_AUTOHSCROLL | WS_BORDER );
-        }
+        TextBox() { this->AddStyle( ES_AUTOHSCROLL | WS_BORDER ); }
     };
 
     struct TextArea : EditControl<TextBox>
@@ -374,7 +374,7 @@ namespace EWUI
         template<DerivedFrom<ControlConfig> T>
         decltype( auto ) operator<<( T&& Child_ )
         {
-            if( this->Handle() == NULL ) return *this;
+            if( this->Handle() == NULL ) return static_cast<CRTP&>( *this );
 
             Child_.Parent( this->Handle() );
             if( Child_.Handle() == NULL )
@@ -400,19 +400,28 @@ namespace EWUI
                 // SetParent() has different effect
                 SetWindowLongPtr( Child_.Handle(), GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>( Child_.Parent() ) );
             }
-            return *this;
+            return static_cast<CRTP&>( *this );
         }
 
-        void Show() { ShowWindow( this->Handle(), SW_SHOW ); }
+        decltype( auto ) Show() noexcept
+        {
+            ShowWindow( this->Handle(), SW_SHOW );
+            return static_cast<CRTP&>( *this );
+        }
 
-        void Hide() { ShowWindow( this->Handle(), SW_HIDE ); }
+        decltype( auto ) Hide() noexcept
+        {
+            ShowWindow( this->Handle(), SW_HIDE );
+            return static_cast<CRTP&>( *this );
+        }
 
-        void ToggleVisibility()
+        decltype( auto ) ToggleVisibility() noexcept
         {
             if( GetWindowLong( this->Handle(), GWL_STYLE ) & WS_VISIBLE )
                 this->Hide();
             else
                 this->Show();
+            return static_cast<CRTP&>( *this );
         }
     };
 

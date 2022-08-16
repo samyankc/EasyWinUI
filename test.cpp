@@ -19,18 +19,18 @@ int EWUI::Main()
                             .Action( [&] { HeaderLabel = "Button Clicked."; } );
 
 
-    auto InputBox1 = TextBox().Dimension({200,24});
-    auto InputBox2 = TextBox().Dimension({200,24});
+    auto InputBox1 = TextBox().Dimension( { 200, 24 } );
+    auto InputBox2 = TextBox().Dimension( { 200, 24 } );
 
     auto InputArea = TextArea().Dimension( { 200, 100 } );
 
-    auto PopupWindow1 = PopupWindow().Dimension( { 300, 600 } );
-    PopupWindow1.Hide();
+    auto PopupWindow1 = PopupWindow().Dimension( { 300, 600 } ).Hide();
+    PopupWindow1.ReSize( PopupWindow1.Dimension() );
 
-
-    PopupWindow1 << TextLabel()                    //
-                        .Dimension( { 100, 200 } )  //
-                 << Button()                       //
+    PopupWindow1 << TextLabel()  //
+                        .Label( "Capture" )
+                        .Dimension( { 100, 200 } )
+                 << Button()  //
                         .Label( "test" )
                         .Action( [&] {
                             auto MyControl = CreateControl( "LDPlayerMainFrame", "RenderWindow" );
@@ -56,7 +56,7 @@ int EWUI::Main()
                       } );
 
 
-    MainWindow << PopupWindow1;
+   return  MainWindow << PopupWindow1;
 
     //MonitorHandle = InputBox1;
 

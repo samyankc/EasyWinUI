@@ -80,7 +80,7 @@ struct Notepad_
     } exe;
 
     Notepad_& operator++( int );
-} Notepad{ "C:\\Windows\\System32\\notepad.exe", "Edit" },
+} Notepad{ "C:\\Windows\\System32\\notepad.exe", "Edit", SendMessage },
     NotepadPlusPlus{ "C:\\Program Files\\Notepad++\\notepad++.exe", "Scintilla", SendMessageW };
 Notepad_& Notepad_::operator++( int ) { return NotepadPlusPlus; }
 
