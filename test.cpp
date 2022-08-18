@@ -7,17 +7,14 @@ int EWUI::Main()
                           .Origin( { 10, 10 } )
                           .Dimension( { -1, -1 } );
 
-
     auto HeaderLabel = TextLabel()  //
                            .Label( "Header, Click button to change this text" )
                            .Dimension( { 400, 50 } );
-
 
     auto ActionButton = Button()  //
                             .Label( "Click Me" )
                             .Dimension( { 200, 100 } )
                             .Action( [&] { HeaderLabel = "Button Clicked."; } );
-
 
     auto InputBox1 = TextBox().Dimension( { 200, 24 } );
     auto InputBox2 = TextBox().Dimension( { 200, 24 } );
@@ -38,7 +35,6 @@ int EWUI::Main()
                             Pic.DisplayAt( PopupWindow1, 1, 1 );
                         } );
 
-
     MainWindow << HeaderLabel   //
                << InputBox1     //
                << InputBox2     //
@@ -55,10 +51,8 @@ int EWUI::Main()
                           Notepad.exe << InputBox1.Content() << "\n" << InputBox2.Content() << "\n";
                       } );
 
-
-   return  MainWindow << PopupWindow1;
+    MainWindow << PopupWindow1;
 
     //MonitorHandle = InputBox1;
-
     return MainWindow;
 }

@@ -243,15 +243,14 @@ struct ControlBitMap
         if( hSTDOUT == NULL ) hSTDOUT = GetConsoleWindow();
         HDC hdcSTDOUT = GetDC( hSTDOUT );
 
-        for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1, BORDER_COLOUR );
+        //for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1, BORDER_COLOUR );
         for( int j = 0, pos = 0; j < Dimension.y(); ++j )
         {
-            SetPixel( hdcSTDOUT, OffsetX - 1, OffsetY + j, BORDER_COLOUR );
+          //  SetPixel( hdcSTDOUT, OffsetX - 1, OffsetY + j, BORDER_COLOUR );
             for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
-            SetPixel( hdcSTDOUT, OffsetX - 1 + Dimension.x(), OffsetY + j, BORDER_COLOUR );
+          //  SetPixel( hdcSTDOUT, OffsetX - 1 + Dimension.x(), OffsetY + j, BORDER_COLOUR );
         }
-        for( int i = 0; i < Dimension.x(); ++i )
-            SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1 + Dimension.y(), BORDER_COLOUR );
+        //for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1 + Dimension.y(), BORDER_COLOUR );
 
         ReleaseDC( hSTDOUT, hdcSTDOUT );
     }
@@ -408,12 +407,9 @@ struct CreateControl
 
     Offset GetClientDimension()
     {
-        static const auto ClientDimension = [ & ] {
             RECT ClientRect;
             GetClientRect( Handle, &ClientRect );
-            return Offset{ ClientRect.right, ClientRect.bottom };
-        }();
-        return ClientDimension;
+            return { ClientRect.right, ClientRect.bottom };
     }
 
     void TranslatePoint( Point& Origin )
@@ -513,16 +509,33 @@ struct CreateControl
         int x{ Origin.x() }, y{ Origin.y() }, w{ Dimension.x() }, h{ Dimension.y() };
 
         ControlBitMap BitMap{ Origin, Dimension, {} };
-        BitMap.Pixels.reserve( w * h );
 
         HDC hdcSource = GetDC( Handle );
         auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
+
+        // BITMAP ResultantBitMap;
+        // GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
+
+        // BITMAPINFO BI{};
+        // BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        // BI.bmiHeader.biWidth = w;
+        // BI.bmiHeader.biHeight = h;
+        // BI.bmiHeader.biPlanes = 1;
+        // BI.bmiHeader.biBitCount = 32;
+        // BI.bmiHeader.biSizeImage = 0;
+        // BI.bmiHeader.biCompression = BI_RGB;
+
+        // BitMap.Pixels.resize( w * h );
+        // GetDIBits(hdcSource,VirtualDC.hBMP, 0,h,BitMap.Pixels.data(), &BI,DIB_RGB_COLORS);
+
         ReleaseDC( Handle, hdcSource );
 
+        BitMap.Pixels.reserve( w * h );
         for( int j = 0; j < h; ++j )
-            for( int i = 0; i < w; ++i ) BitMap.Pixels.push_back( GetPixel( VirtualDC, i, j ) );
+            for( int i = 0; i < w; ++i )
+                BitMap.Pixels.push_back( GetPixel( VirtualDC, i, j ) );
 
         return BitMap;
     }

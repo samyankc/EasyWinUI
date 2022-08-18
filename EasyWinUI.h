@@ -15,7 +15,6 @@
 #include <concepts>
 #include <functional>
 #include <algorithm>
-
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 // helpers
@@ -215,9 +214,6 @@ namespace EWUI
 
         auto Width() const noexcept
         {
-            return Dimension().cx;
-
-
             auto rect = GetRect();
             return rect.right - rect.left;
         }
@@ -316,7 +312,7 @@ namespace EWUI
         TextBox() { this->AddStyle( ES_AUTOHSCROLL | WS_BORDER ); }
     };
 
-    struct TextArea : EditControl<TextBox>
+    struct TextArea : EditControl<TextArea>
     {
         using EditControl::operator=;
         TextArea()
