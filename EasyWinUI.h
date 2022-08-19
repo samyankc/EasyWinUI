@@ -93,6 +93,9 @@ namespace EWUI
 {
     int Main();
 
+    struct LineBreaker
+    {} LineBreak;
+
     using ControlAction = std::function<void()>;
     struct ActionContainer_
     {
@@ -397,6 +400,11 @@ namespace EWUI
                 SetWindowLongPtr( Child_.Handle(), GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>( Child_.Parent() ) );
             }
             return static_cast<CRTP&>( *this );
+        }
+
+        decltype( auto ) operator<<( LineBreaker LB )
+        {
+return static_cast<CRTP&>( *this );
         }
 
         decltype( auto ) Show() noexcept

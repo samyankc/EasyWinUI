@@ -73,7 +73,7 @@ namespace
 
             void Clear()
             {
-                if( IsWindow( AppHandle ) )
+                if( AppHandle != NULL && IsWindow( AppHandle ) )
                     SendMessageProxy( AppHandle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( "" ) );
             }
 

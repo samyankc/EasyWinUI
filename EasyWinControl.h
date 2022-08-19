@@ -244,7 +244,7 @@ struct ControlBitMap
         HDC hdcSTDOUT = GetDC( hSTDOUT );
 
         //for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1, BORDER_COLOUR );
-        for( int j = 0, pos = 0; j < Dimension.y(); ++j )
+        for( int j = Dimension.y(), pos = 0; j -->0; )
         {
           //  SetPixel( hdcSTDOUT, OffsetX - 1, OffsetY + j, BORDER_COLOUR );
             for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
@@ -515,27 +515,30 @@ struct CreateControl
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
 
-        // BITMAP ResultantBitMap;
-        // GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
+        BITMAP ResultantBitMap;
+        GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
 
-        // BITMAPINFO BI{};
-        // BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        // BI.bmiHeader.biWidth = w;
-        // BI.bmiHeader.biHeight = h;
-        // BI.bmiHeader.biPlanes = 1;
-        // BI.bmiHeader.biBitCount = 32;
-        // BI.bmiHeader.biSizeImage = 0;
-        // BI.bmiHeader.biCompression = BI_RGB;
+        BITMAPINFO BI{};
+        BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        BI.bmiHeader.biWidth = w;
+        BI.bmiHeader.biHeight = h;
+        BI.bmiHeader.biPlanes = 1;
+        BI.bmiHeader.biBitCount = 32;
+        BI.bmiHeader.biSizeImage = 0;
+        BI.bmiHeader.biCompression = BI_RGB;
 
-        // BitMap.Pixels.resize( w * h );
-        // GetDIBits(hdcSource,VirtualDC.hBMP, 0,h,BitMap.Pixels.data(), &BI,DIB_RGB_COLORS);
+        BitMap.Pixels.resize( w * h );
+
+        GetDIBits(hdcSource,VirtualDC.hBMP, 0,h,BitMap.Pixels.data(), &BI,DIB_RGB_COLORS);
+
+        for( auto& C : BitMap.Pixels ) C = ( GetRValue( C ) << 16 ) | ( GetGValue( C ) << 8 ) | GetBValue( C );
 
         ReleaseDC( Handle, hdcSource );
 
-        BitMap.Pixels.reserve( w * h );
-        for( int j = 0; j < h; ++j )
-            for( int i = 0; i < w; ++i )
-                BitMap.Pixels.push_back( GetPixel( VirtualDC, i, j ) );
+        // BitMap.Pixels.reserve( w * h );
+        // for( int j = 0; j < h; ++j )
+        //     for( int i = 0; i < w; ++i )
+        //         BitMap.Pixels.push_back( GetPixel( VirtualDC, i, j ) );
 
         return BitMap;
     }
