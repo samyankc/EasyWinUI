@@ -20,6 +20,7 @@ COLORREF colour = Control.GetColour(x,y);
 #include <gdiplus.h>
 #include <string>
 #include <iomanip>
+#include <span>
 #include <EasyNotepad.h>
 
 #define SIMILARITY_THRESHOLD 20
@@ -239,18 +240,13 @@ struct ControlBitMap
 
     void DisplayAt( HWND hSTDOUT, int OffsetX, int OffsetY )
     {
-        constexpr auto BORDER_COLOUR = 0xFF;
         if( hSTDOUT == NULL ) hSTDOUT = GetConsoleWindow();
         HDC hdcSTDOUT = GetDC( hSTDOUT );
 
-        //for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1, BORDER_COLOUR );
-        for( int j = Dimension.y(), pos = 0; j -->0; )
-        {
-          //  SetPixel( hdcSTDOUT, OffsetX - 1, OffsetY + j, BORDER_COLOUR );
-            for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
-          //  SetPixel( hdcSTDOUT, OffsetX - 1 + Dimension.x(), OffsetY + j, BORDER_COLOUR );
-        }
-        //for( int i = 0; i < Dimension.x(); ++i ) SetPixel( hdcSTDOUT, OffsetX + i, OffsetY - 1 + Dimension.y(), BORDER_COLOUR );
+        // for( int j = Dimension.y(), pos = 0; j -->0; )
+        for( int j = 0, pos = 0; j < Dimension.y(); ++j )
+            for( int i = 0; i < Dimension.x(); ++i )
+                SetPixel( hdcSTDOUT, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
 
         ReleaseDC( hSTDOUT, hdcSTDOUT );
     }
@@ -515,13 +511,13 @@ struct CreateControl
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
 
-        BITMAP ResultantBitMap;
-        GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
+        // BITMAP ResultantBitMap;
+        // GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
 
         BITMAPINFO BI{};
         BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         BI.bmiHeader.biWidth = w;
-        BI.bmiHeader.biHeight = h;
+        BI.bmiHeader.biHeight = -h;
         BI.bmiHeader.biPlanes = 1;
         BI.bmiHeader.biBitCount = 32;
         BI.bmiHeader.biSizeImage = 0;
@@ -529,8 +525,16 @@ struct CreateControl
 
         BitMap.Pixels.resize( w * h );
 
-        GetDIBits(hdcSource,VirtualDC.hBMP, 0,h,BitMap.Pixels.data(), &BI,DIB_RGB_COLORS);
+        // auto BitMapAsBytes = std::as_writable_bytes(std::span(BitMap.Pixels.begin(),BitMap.Pixels.end()));
+        // auto InvertedBitMapBytes = std::vector<std::byte>(BitMapAsBytes.size());
 
+        // GetDIBits( VirtualDC.hdcDestin, VirtualDC.hBMP, 0, h, InvertedBitMapBytes.data(), &BI, DIB_RGB_COLORS );
+
+        // std::copy(InvertedBitMapBytes.rbegin(),InvertedBitMapBytes.rend(),BitMapAsBytes.begin());
+        // for (auto& v : BitMap.Pixels) v >>= 8;
+
+
+        GetDIBits( VirtualDC.hdcDestin, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BI, DIB_RGB_COLORS );
         for( auto& C : BitMap.Pixels ) C = ( GetRValue( C ) << 16 ) | ( GetGValue( C ) << 8 ) | GetBValue( C );
 
         ReleaseDC( Handle, hdcSource );

@@ -328,7 +328,8 @@ namespace EWUI
     template<typename CRTP>
     struct WindowControl : Control<CRTP>
     {
-        POINT ComponentOffset{ 10, 0 };
+        constexpr static SIZE ComponentSeparation{10,10};
+        POINT ComponentOffset{ 0, 0 };
         SIZE  ComponentTotalSize{ 0, 0 };
         // PAINTSTRUCT ps;
         // HDC hdc;
@@ -379,8 +380,8 @@ namespace EWUI
             if( Child_.Handle() == NULL )
             {
                 if( Child_.Origin() == POINT{ 0, 0 } ) Child_.Origin( ComponentOffset );
-                ComponentOffset.y += Child_.Dimension().cy + 10;
-                ComponentTotalSize.cy = ComponentOffset.y;
+                ComponentOffset.x += Child_.Dimension().cx + ComponentSeparation.cx;
+                ComponentTotalSize.cy = std::max( ComponentTotalSize.cy, Child_.Origin().y + Child_.Dimension().cy );
                 ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, Child_.Origin().x + Child_.Dimension().cx );
                 Child_.Handle( CreateWindowEx( Child_.ExStyle(), Child_.ClassName(),          //
                                                Child_.Label(), Child_.Style(),                //
@@ -402,9 +403,18 @@ namespace EWUI
             return static_cast<CRTP&>( *this );
         }
 
-        decltype( auto ) operator<<( LineBreaker LB )
+        decltype( auto ) operator<<( std::string_view TextContent )
         {
-return static_cast<CRTP&>( *this );
+            SIZE TextContentDimension;
+            GetTextExtentPoint32(GetDC(this->m_Handle),TextContent.data(),TextContent.length(),&TextContentDimension);
+            return this->operator<<( TextLabel().Label(TextContent.data()).Dimension(TextContentDimension));
+        }
+
+        decltype( auto ) operator<<( LineBreaker )
+        {
+            ComponentOffset.y = ComponentTotalSize.cy + ComponentSeparation.cy;
+            ComponentOffset.x = ComponentSeparation.cx;
+            return static_cast<CRTP&>( *this );
         }
 
         decltype( auto ) Show() noexcept
