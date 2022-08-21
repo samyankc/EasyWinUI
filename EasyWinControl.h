@@ -142,7 +142,21 @@ struct ControlBitMap
 {
     Point Origin;
     Offset Dimension;
+    BITMAPINFO BI{};
     std::vector<COLORREF> Pixels;
+
+    ControlBitMap(Point Origin_, Offset Dimension_) : Origin(Origin_), Dimension(Dimension_)
+    {
+        BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        BI.bmiHeader.biWidth = Dimension.x();
+        BI.bmiHeader.biHeight = -Dimension.y();
+        BI.bmiHeader.biPlanes = 1;
+        BI.bmiHeader.biBitCount = 32;
+        BI.bmiHeader.biSizeImage = 0;
+        BI.bmiHeader.biCompression = BI_RGB;
+
+        Pixels.resize(Dimension.x() * Dimension.y());
+    }
 
     ControlBitMap IsolateColour( COLORREF KeepColour, COLORREF ColourMask = IGNORE_COLOUR,
                                  int SimilarityThreshold = SIMILARITY_THRESHOLD )
@@ -504,7 +518,7 @@ struct CreateControl
     {
         int x{ Origin.x() }, y{ Origin.y() }, w{ Dimension.x() }, h{ Dimension.y() };
 
-        ControlBitMap BitMap{ Origin, Dimension, {} };
+        ControlBitMap BitMap( Origin, Dimension );
 
         HDC hdcSource = GetDC( Handle );
         auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
@@ -514,35 +528,20 @@ struct CreateControl
         // BITMAP ResultantBitMap;
         // GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
 
-        BITMAPINFO BI{};
-        BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        BI.bmiHeader.biWidth = w;
-        BI.bmiHeader.biHeight = -h;
-        BI.bmiHeader.biPlanes = 1;
-        BI.bmiHeader.biBitCount = 32;
-        BI.bmiHeader.biSizeImage = 0;
-        BI.bmiHeader.biCompression = BI_RGB;
-
-        BitMap.Pixels.resize( w * h );
 
         // auto BitMapAsBytes = std::as_writable_bytes(std::span(BitMap.Pixels.begin(),BitMap.Pixels.end()));
         // auto InvertedBitMapBytes = std::vector<std::byte>(BitMapAsBytes.size());
 
-        // GetDIBits( VirtualDC.hdcDestin, VirtualDC.hBMP, 0, h, InvertedBitMapBytes.data(), &BI, DIB_RGB_COLORS );
+        // GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, InvertedBitMapBytes.data(), &BitMap.BI, DIB_RGB_COLORS );
 
         // std::copy(InvertedBitMapBytes.rbegin(),InvertedBitMapBytes.rend(),BitMapAsBytes.begin());
         // for (auto& v : BitMap.Pixels) v >>= 8;
 
 
-        GetDIBits( VirtualDC.hdcDestin, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BI, DIB_RGB_COLORS );
-        for( auto& C : BitMap.Pixels ) C = ( GetRValue( C ) << 16 ) | ( GetGValue( C ) << 8 ) | GetBValue( C );
+        GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BitMap.BI, DIB_RGB_COLORS );
+        //for( auto& C : BitMap.Pixels ) C = ( GetRValue( C ) << 16 ) | ( GetGValue( C ) << 8 ) | GetBValue( C );
 
         ReleaseDC( Handle, hdcSource );
-
-        // BitMap.Pixels.reserve( w * h );
-        // for( int j = 0; j < h; ++j )
-        //     for( int i = 0; i < w; ++i )
-        //         BitMap.Pixels.push_back( GetPixel( VirtualDC, i, j ) );
 
         return BitMap;
     }

@@ -2,6 +2,7 @@
 #define EASYWINUI_H
 
 #include <Windows.h>
+#include <gdiplus.h>
 #include <CommCtrl.h>
 #include <iostream>
 #include <iomanip>
@@ -93,6 +94,11 @@ namespace EWUI
 {
     int Main();
 
+    struct Spacer
+    {
+        int x{};
+    };
+
     struct LineBreaker
     {} LineBreak;
 
@@ -124,7 +130,7 @@ namespace EWUI
             ActionVector.push_back( Action_ );
         }
 
-    } ActionContainer{};
+    } ActionContainer{}, PainterContainer{};
 
 
     LRESULT CALLBACK WndProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
@@ -132,6 +138,13 @@ namespace EWUI
         switch( msg )
         {
             case WM_CREATE : break;
+            case WM_MOVE :
+            case WM_SIZE : InvalidateRect(hwnd,NULL,true); break;
+            case WM_PAINT :
+            //  // std::thread(
+                    PainterContainer[hwnd]
+            //  //).detach
+             ();break;
             case WM_COMMAND : std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach(); break;
             case WM_CLOSE :
                 if( GetWindow( hwnd, GW_OWNER ) == NULL )
@@ -268,6 +281,29 @@ namespace EWUI
         }
     };
 
+    struct Canvas : Control<Canvas>
+    {
+        ControlAction m_Painter{};
+
+        Canvas()
+        {
+            this->ClassName( WC_STATIC );
+            this->RemoveStyle( WS_TABSTOP );
+        }
+
+        void Paint() const noexcept{
+            m_Painter();
+        };
+
+        decltype( auto ) Painter() const noexcept { return m_Painter; }
+
+        decltype( auto ) Painter( ControlAction Painter_ ) noexcept
+        {
+            m_Painter = Painter_;
+            return *this;
+        }
+    };
+
     struct Button : Control<Button>
     {
         ControlAction m_Action{};
@@ -277,6 +313,8 @@ namespace EWUI
             this->ClassName( WC_BUTTON );
             this->AddStyle( BS_PUSHBUTTON | BS_FLAT );
         }
+
+        void Click() const noexcept { m_Action(); }
 
         decltype( auto ) Action() const noexcept { return m_Action; }
 
@@ -382,17 +420,19 @@ namespace EWUI
                 if( Child_.Origin() == POINT{ 0, 0 } ) Child_.Origin( ComponentOffset );
                 ComponentOffset.x += Child_.Dimension().cx + ComponentSeparation.cx;
                 ComponentTotalSize.cy = std::max( ComponentTotalSize.cy, Child_.Origin().y + Child_.Dimension().cy );
-                ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, Child_.Origin().x + Child_.Dimension().cx );
+                ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, ComponentOffset.x + Child_.Dimension().cx );
                 Child_.Handle( CreateWindowEx( Child_.ExStyle(), Child_.ClassName(),          //
                                                Child_.Label(), Child_.Style(),                //
                                                Child_.Origin().x, Child_.Origin().y,          //
                                                Child_.Dimension().cx, Child_.Dimension().cy,  //
                                                Child_.Parent(), Child_.MenuID(), EWUI::EntryPointParamPack.hInstance,
                                                NULL ) );
+
                 if constexpr( MatchType<T, Button> )
-                {
                     ActionContainer.RegisterAction( Child_.Handle(), Child_.Action() );
-                }
+
+                if constexpr( MatchType<T, Canvas> )
+                    PainterContainer.RegisterAction( Child_.Handle(), Child_.Painter() );
             }
             else
             {
@@ -414,6 +454,13 @@ namespace EWUI
         {
             ComponentOffset.y = ComponentTotalSize.cy + ComponentSeparation.cy;
             ComponentOffset.x = ComponentSeparation.cx;
+            return static_cast<CRTP&>( *this );
+        }
+
+        decltype( auto ) operator<<( Spacer Spacer_ )
+        {
+            ComponentOffset.x += Spacer_.x;
+            ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, ComponentOffset.x );
             return static_cast<CRTP&>( *this );
         }
 
