@@ -53,7 +53,7 @@ namespace
 
     void PrintMSG( std::string_view PrefixString, MSG Msg )
     {
-        if( MonitorHandle == NULL || Msg.hwnd != MonitorHandle ) return;
+        //if( MonitorHandle == NULL || Msg.hwnd != MonitorHandle ) return;
         auto w10 = std::setw( 12 );
         auto w5 = std::setw( 5 );
         std::cout << PrefixString << '\t' << w10 << Msg.message                                       //
@@ -100,7 +100,8 @@ namespace EWUI
     };
 
     struct LineBreaker
-    {} LineBreak;
+    {
+    } LineBreak;
 
     using ControlAction = std::function<void()>;
     struct ActionContainer_
@@ -138,13 +139,13 @@ namespace EWUI
         switch( msg )
         {
             case WM_CREATE : break;
-            case WM_MOVE :
-            case WM_SIZE : InvalidateRect(hwnd,NULL,true); break;
+            // case WM_MOVE :
+            // case WM_SIZE : InvalidateRect( hwnd, NULL, true ); break;
             case WM_PAINT :
-            //  // std::thread(
-                    PainterContainer[hwnd]
-            //  //).detach
-             ();break;
+                    // std::thread( PainterContainer[hwnd] ).detach ();
+                    for( auto& P : PainterContainer.ActionVector ) P();
+
+                break;
             case WM_COMMAND : std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach(); break;
             case WM_CLOSE :
                 if( GetWindow( hwnd, GW_OWNER ) == NULL )
@@ -291,9 +292,7 @@ namespace EWUI
             this->RemoveStyle( WS_TABSTOP );
         }
 
-        void Paint() const noexcept{
-            m_Painter();
-        };
+        void Paint() const noexcept { m_Painter(); };
 
         decltype( auto ) Painter() const noexcept { return m_Painter; }
 
@@ -366,9 +365,9 @@ namespace EWUI
     template<typename CRTP>
     struct WindowControl : Control<CRTP>
     {
-        constexpr static SIZE ComponentSeparation{10,10};
-        POINT ComponentOffset{ 0, 0 };
-        SIZE  ComponentTotalSize{ 0, 0 };
+        constexpr static SIZE ComponentSeparation{ 10, 10 };
+        POINT                 ComponentOffset{ 0, 0 };
+        SIZE                  ComponentTotalSize{ 0, 0 };
         // PAINTSTRUCT ps;
         // HDC hdc;
 
@@ -428,8 +427,7 @@ namespace EWUI
                                                Child_.Parent(), Child_.MenuID(), EWUI::EntryPointParamPack.hInstance,
                                                NULL ) );
 
-                if constexpr( MatchType<T, Button> )
-                    ActionContainer.RegisterAction( Child_.Handle(), Child_.Action() );
+                if constexpr( MatchType<T, Button> ) ActionContainer.RegisterAction( Child_.Handle(), Child_.Action() );
 
                 if constexpr( MatchType<T, Canvas> )
                     PainterContainer.RegisterAction( Child_.Handle(), Child_.Painter() );
@@ -446,8 +444,10 @@ namespace EWUI
         decltype( auto ) operator<<( std::string_view TextContent )
         {
             SIZE TextContentDimension;
-            GetTextExtentPoint32(GetDC(this->m_Handle),TextContent.data(),TextContent.length(),&TextContentDimension);
-            return this->operator<<( TextLabel().Label(TextContent.data()).Dimension(TextContentDimension));
+            auto hdc = GetDC( this->Handle() );
+            GetTextExtentPoint32( hdc, TextContent.data(), TextContent.length(), &TextContentDimension );
+            ReleaseDC( this->Handle(), hdc );
+            return this->operator<<( TextLabel().Label( TextContent.data() ).Dimension( TextContentDimension ) );
         }
 
         decltype( auto ) operator<<( LineBreaker )
@@ -510,7 +510,6 @@ namespace EWUI
             static int msg_counter = 0;
             while( GetMessage( &Msg, NULL, 0, 0 ) > 0 )
             {
-                PrintMSG( ">>", Msg );
                 if( ( Msg.message == WM_KEYDOWN || Msg.message == WM_KEYUP )  //
                     && Msg.wParam == VK_RETURN                                //
                     && MatchClass<WC_EDIT>( Msg.hwnd )                        //
