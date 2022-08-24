@@ -144,7 +144,6 @@ namespace EWUI
             case WM_PAINT :
                     // std::thread( PainterContainer[hwnd] ).detach ();
                     for( auto& P : PainterContainer.ActionVector ) P();
-
                 break;
             case WM_COMMAND : std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach(); break;
             case WM_CLOSE :
@@ -156,6 +155,7 @@ namespace EWUI
             case WM_DESTROY : PostQuitMessage( 0 ); break;
             default : return DefWindowProc( hwnd, msg, wParam, lParam );
         }
+
         return 0;
     }
 
@@ -292,7 +292,7 @@ namespace EWUI
             this->RemoveStyle( WS_TABSTOP );
         }
 
-        void Paint() const noexcept { m_Painter(); };
+        void Paint() const noexcept { m_Painter();};
 
         decltype( auto ) Painter() const noexcept { return m_Painter; }
 
@@ -520,6 +520,9 @@ namespace EWUI
 
                 if( ! IsDialogMessage( this->Handle(), &Msg ) )
                 {
+
+                    PrintMSG(">>",Msg);
+
                     TranslateMessage( &Msg );
                     DispatchMessage( &Msg );
                 }
