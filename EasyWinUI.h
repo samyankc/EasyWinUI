@@ -53,6 +53,20 @@ namespace
 
     void PrintMSG( std::string_view PrefixString, MSG Msg )
     {
+        // ignore messages
+        switch( Msg.message )
+        {
+            case WM_MOUSEMOVE :
+            case WM_SIZE :
+            case WM_TIMER :
+            case WM_NCMOUSEMOVE :
+            case WM_NCMOUSELEAVE :
+            case WM_NCLBUTTONDOWN :
+            case WM_LBUTTONDOWN :
+            case 96 : return;
+            default : break;
+        }
+
         //if( MonitorHandle == NULL || Msg.hwnd != MonitorHandle ) return;
         auto w10 = std::setw( 12 );
         auto w5 = std::setw( 5 );
@@ -93,6 +107,8 @@ namespace
 namespace EWUI
 {
     int Main();
+
+    using ByteVector = std::vector<std::byte>;
 
     struct Spacer
     {
@@ -138,12 +154,16 @@ namespace EWUI
     {
         switch( msg )
         {
-            case WM_CREATE : break;
+            // case WM_CREATE : break;
             // case WM_MOVE :
             // case WM_SIZE : InvalidateRect( hwnd, NULL, true ); break;
             case WM_PAINT :
-                    // std::thread( PainterContainer[hwnd] ).detach ();
-                    for( auto& P : PainterContainer.ActionVector ) P();
+                // std::thread( PainterContainer[hwnd] ).detach ();
+                for( auto& PaintAction : PainterContainer.ActionVector ) PaintAction();
+                DefWindowProc( hwnd, msg, wParam, lParam );
+
+                //PainterContainer[hwnd]();
+
                 break;
             case WM_COMMAND : std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach(); break;
             case WM_CLOSE :
@@ -286,13 +306,28 @@ namespace EWUI
     {
         ControlAction m_Painter{};
 
+
         Canvas()
         {
             this->ClassName( WC_STATIC );
             this->RemoveStyle( WS_TABSTOP );
         }
 
-        void Paint() const noexcept { m_Painter();};
+        void Paint() const noexcept
+        {
+            m_Painter();
+        }
+
+        void Paint( LPBITMAPINFO lpBI_, LPVOID lpBits_ ) const noexcept
+        {
+            if( this->Handle() == NULL ) return;
+
+            auto hdc = GetDC( this->Handle() );
+            SetDIBitsToDevice( hdc, 0, 0, lpBI_->bmiHeader.biWidth, lpBI_->bmiHeader.biHeight, 0, 0, 0,
+                               lpBI_->bmiHeader.biHeight, lpBits_, lpBI_, DIB_RGB_COLORS );
+            ReleaseDC( this->Handle(), hdc );
+            ValidateRect( this->Handle(), NULL );
+        }
 
         decltype( auto ) Painter() const noexcept { return m_Painter; }
 
@@ -520,8 +555,7 @@ namespace EWUI
 
                 if( ! IsDialogMessage( this->Handle(), &Msg ) )
                 {
-
-                    PrintMSG(">>",Msg);
+                    PrintMSG( ">>", Msg );
 
                     TranslateMessage( &Msg );
                     DispatchMessage( &Msg );

@@ -252,17 +252,19 @@ struct ControlBitMap
         return Dimension;  // indicate not found
     }
 
-    void DisplayAt( HWND hSTDOUT, int OffsetX, int OffsetY )
+    void DisplayAt( HWND CanvasHandle, int OffsetX = 0, int OffsetY = 0 )
     {
-        if( hSTDOUT == NULL ) hSTDOUT = GetConsoleWindow();
-        HDC hdcSTDOUT = GetDC( hSTDOUT );
+        if( CanvasHandle == NULL ) return;
+        HDC hdc = GetDC( CanvasHandle );
 
-        // for( int j = Dimension.y(), pos = 0; j -->0; )
-        for( int j = 0, pos = 0; j < Dimension.y(); ++j )
-            for( int i = 0; i < Dimension.x(); ++i )
-                SetPixel( hdcSTDOUT, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
+        SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.x(), Dimension.y(), //
+                           0, 0, 0, Dimension.y(), Pixels.data(), &BI, DIB_RGB_COLORS );
 
-        ReleaseDC( hSTDOUT, hdcSTDOUT );
+        // for( int j = 0, pos = 0; j < Dimension.y(); ++j )
+        //     for( int i = 0; i < Dimension.x(); ++i )
+        //         SetPixel( hdc, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
+
+        ReleaseDC( CanvasHandle, hdc );
     }
 
     void DisplayAt( int OffsetX, int OffsetY ) { DisplayAt( GetConsoleWindow(), OffsetX, OffsetY ); }
