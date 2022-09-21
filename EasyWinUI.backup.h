@@ -262,7 +262,7 @@ int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 }
 #endif
 
-#ifdef TEST_CODE
+#ifndef TEST_CODE
 
 int EWUI::Main()
 {

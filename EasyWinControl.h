@@ -12,29 +12,31 @@ COLORREF colour = Control.GetColour(x,y);
 #ifndef EASYWINCONTROL_H
 #define EASYWINCONTROL_H
 
-#include <iostream>
-#include <cstring>
-#include <vector>
-#include <map>
-#include <Windows.h>
-#include <gdiplus.h>
-#include <string>
-#include <iomanip>
-#include <span>
 #include <EasyNotepad.h>
+#include <gdiplus.h>
+#include <Windows.h>
+
+#include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <span>
+#include <string>
+#include <vector>
+
 
 #define SIMILARITY_THRESHOLD 20
 
-#define STRINGIFY_IMPL(s) #s
-#define STRINGIFY(s) STRINGIFY_IMPL(s)
+#define STRINGIFY_IMPL( s ) #s
+#define STRINGIFY( s ) STRINGIFY_IMPL( s )
 
 #define IGNORE_COLOUR 0x1000000
 #define REJECT_COLOUR 0x2000000  // EXCLUDE_COLOUR | 0xBBGGRR  ==>  all colours allowed except 0xBBGGRR ( exact match )
 
 //#define IGNORE_TEXT         "_WwWwWwW_"
-#define IGNORE_TEXT STRINGIFY(IGNORE_COLOUR)
-#define _WwWwW_     IGNORE_COLOUR
-#define _WwWwWwW_   IGNORE_COLOUR
+#define IGNORE_TEXT STRINGIFY( IGNORE_COLOUR )
+#define _WwWwW_ IGNORE_COLOUR
+#define _WwWwWwW_ IGNORE_COLOUR
 
 //#define Associate(Object,Method) auto Method = std::bind_front(&decltype(Object)::Method, &Object)
 /*
@@ -45,7 +47,7 @@ auto Method = [&Object = Object]    \
 */
 
 constexpr int nMaxCount = 40;
-char lpText[ nMaxCount ];
+char          lpText[nMaxCount];
 
 void ShowHandleName( HWND hwnd )
 {
@@ -100,7 +102,7 @@ std::vector<HWND> GetWindowHandleByName( const char* name )
     struct DATA
     {
         std::vector<HWND>& Handles;
-        const char* name;
+        const char*        name;
     } lParam{ Handles, name };
 
     EnumWindows(
@@ -128,10 +130,10 @@ struct Point
     LPARAM POINT_DATA;
     constexpr Point( LPARAM _src ) : POINT_DATA( _src ) {}
     constexpr Point( int x, int y ) : POINT_DATA( MAKELPARAM( x, y ) ) {}
-    constexpr operator LPARAM&() { return POINT_DATA; }
-    constexpr Point operator-() const { return { -x(), -y() }; }
-    constexpr Point operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
-    constexpr Point& operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
+    constexpr         operator LPARAM&() { return POINT_DATA; }
+    constexpr Point   operator-() const { return { -x(), -y() }; }
+    constexpr Point   operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
+    constexpr Point&  operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
     constexpr int16_t x() const { return LOWORD( POINT_DATA ); }
     constexpr int16_t y() const { return HIWORD( POINT_DATA ); }
     constexpr friend bool operator==( const Point& lhs, const Point& rhs ) { return lhs.POINT_DATA == rhs.POINT_DATA; }
@@ -140,14 +142,14 @@ using Offset = Point;
 
 struct ControlBitMap
 {
-    Point Origin;
-    Offset Dimension;
-    BITMAPINFO BI{};
+    Point                 Origin;
+    Offset                Dimension;
+    BITMAPINFO            BI{};
     std::vector<COLORREF> Pixels;
 
-    ControlBitMap(Point Origin_, Offset Dimension_) : Origin(Origin_), Dimension(Dimension_)
+    ControlBitMap( Point Origin_, Offset Dimension_ ) : Origin( Origin_ ), Dimension( Dimension_ )
     {
-        BI.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        BI.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
         BI.bmiHeader.biWidth = Dimension.x();
         BI.bmiHeader.biHeight = -Dimension.y();
         BI.bmiHeader.biPlanes = 1;
@@ -155,7 +157,7 @@ struct ControlBitMap
         BI.bmiHeader.biSizeImage = 0;
         BI.bmiHeader.biCompression = BI_RGB;
 
-        Pixels.resize(Dimension.x() * Dimension.y());
+        Pixels.resize( Dimension.x() * Dimension.y() );
     }
 
     ControlBitMap IsolateColour( COLORREF KeepColour, COLORREF ColourMask = IGNORE_COLOUR,
@@ -168,18 +170,15 @@ struct ControlBitMap
         return NewMap;
     }
 
-    COLORREF GetColour( int x, int y ) { return Pixels[ x + y * Dimension.x() ]; }
+    COLORREF GetColour( int x, int y ) { return Pixels[x + y * Dimension.x()]; }
 
-    COLORREF& operator[]( const Point& CheckPoint )
-    {
-        return Pixels[ CheckPoint.x() + CheckPoint.y() * Dimension.x() ];
-    }
+    COLORREF& operator[]( const Point& CheckPoint ) { return Pixels[CheckPoint.x() + CheckPoint.y() * Dimension.x()]; }
 
     Point FindMonochromeBlockLocal( const ControlBitMap& MonochromeMap, const Point prelim, const Point sentinel )
     {
         if( prelim.x() >= sentinel.x() || prelim.y() >= sentinel.y() ) return Dimension;
 
-        auto Match = MonochromeMap.Pixels[ 0 ];
+        auto Match = MonochromeMap.Pixels[0];
         auto w = MonochromeMap.Dimension.x();
         auto h = MonochromeMap.Dimension.y();
 
@@ -231,7 +230,7 @@ struct ControlBitMap
     // special use of ControlBitMap format, only use Dimension field & single element Pixels vector
     // eg. { {0,0},{102,140},{0x0F7F7F7} }
     {
-        auto Match = MonochromeMap.Pixels[ 0 ];
+        auto Match = MonochromeMap.Pixels[0];
         auto w = MonochromeMap.Dimension.x();
         auto h = MonochromeMap.Dimension.y();
 
@@ -257,7 +256,7 @@ struct ControlBitMap
         if( CanvasHandle == NULL ) return;
         HDC hdc = GetDC( CanvasHandle );
 
-        SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.x(), Dimension.y(), //
+        SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.x(), Dimension.y(),  //
                            0, 0, 0, Dimension.y(), Pixels.data(), &BI, DIB_RGB_COLORS );
 
         // for( int j = 0, pos = 0; j < Dimension.y(); ++j )
@@ -281,10 +280,10 @@ struct ControlBitMap
             {
                 if( x % Dimension.x() == 0 ) OSS << "\n    ";
 
-                if( Pixels[ pos ] & IGNORE_COLOUR )
+                if( Pixels[pos] & IGNORE_COLOUR )
                     OSS << IGNORE_TEXT;
                 else
-                    OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex << Pixels[ pos ];
+                    OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex << Pixels[pos];
 
                 if( pos < Dimension.x() * Dimension.y() - 1 ) OSS << " , ";
             }
@@ -301,7 +300,7 @@ struct ControlBitMap
     struct                                               \
     {                                                    \
         const AcquireFocus_& _Dummy_;                    \
-        bool _InLoop_;                                   \
+        bool                 _InLoop_;                   \
     } TemporaryFocus{ AcquireFocus_{ _Handle_ }, true }; \
     TemporaryFocus._InLoop_;                             \
     TemporaryFocus._InLoop_ = false
@@ -329,7 +328,7 @@ struct AcquireFocus_
 
 struct VirtualDeviceContext
 {
-    HDC hdcDestin;
+    HDC     hdcDestin;
     HBITMAP hBMP;
 
     VirtualDeviceContext( const HDC& hdcSource, int w, int h )
@@ -351,10 +350,10 @@ struct VirtualDeviceContext
 struct CreateControl
 {
     HWND Handle;
-    int ClickDuration{ 30 };
-    int ClickDelay{ 120 };
-    int KeyDuration{ 20 };
-    int KeyDelay{ 80 };
+    int  ClickDuration{ 30 };
+    int  ClickDelay{ 120 };
+    int  KeyDuration{ 20 };
+    int  KeyDelay{ 80 };
 
     CreateControl() : Handle( NULL ) {}
 
@@ -377,23 +376,24 @@ struct CreateControl
 
         switch( WindowHandles.size() )
         {
-            case 0: Handle = NULL; return;
-            case 1:
-                Handle = FindWindowEx( WindowHandles[ 0 ], NULL, ControlName, NULL );
-                if( Handle == NULL ) Handle = WindowHandles[ 0 ];
+            case 0 : Handle = NULL; return;
+            case 1 :
+                Handle = FindWindowEx( WindowHandles[0], NULL, ControlName, NULL );
+                if( Handle == NULL ) Handle = WindowHandles[0];
                 break;
-            default: {
+            default :
+            {
                 for( std::size_t i = 0; i < WindowHandles.size(); ++i )
                 {
                     std::cout << "[" << i << "] ";
-                    ShowHandleName( WindowHandles[ i ] );
+                    ShowHandleName( WindowHandles[i] );
                 }
                 std::cout << "Pick handle: ";
                 int choice;
                 std::cin >> choice;
                 std::cout << "Chosen: ";
-                ShowHandleName( WindowHandles[ choice ] );
-                Handle = FindWindowEx( WindowHandles[ choice ], NULL, ControlName, NULL );
+                ShowHandleName( WindowHandles[choice] );
+                Handle = FindWindowEx( WindowHandles[choice], NULL, ControlName, NULL );
                 break;
             }
         }
@@ -415,13 +415,13 @@ struct CreateControl
         Sleep( KeyDelay );
     }
 
-    inline void SendText( const char* Text ) { SendMessage( Handle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(Text) ); }
+    inline void SendText( const char* Text ) { SendMessage( Handle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( Text ) ); }
 
     Offset GetClientDimension()
     {
-            RECT ClientRect;
-            GetClientRect( Handle, &ClientRect );
-            return { ClientRect.right, ClientRect.bottom };
+        RECT ClientRect;
+        GetClientRect( Handle, &ClientRect );
+        return { ClientRect.right, ClientRect.bottom };
     }
 
     void TranslatePoint( Point& Origin )
@@ -522,7 +522,7 @@ struct CreateControl
 
         ControlBitMap BitMap( Origin, Dimension );
 
-        HDC hdcSource = GetDC( Handle );
+        HDC  hdcSource = GetDC( Handle );
         auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
@@ -553,7 +553,7 @@ struct CreateControl
         int x{ ReferenceBitMap.Origin.x() }, y{ ReferenceBitMap.Origin.y() }, w{ ReferenceBitMap.Dimension.x() },
             h{ ReferenceBitMap.Dimension.y() };
 
-        HDC hdcSource = GetDC( Handle );
+        HDC  hdcSource = GetDC( Handle );
         auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
@@ -562,7 +562,7 @@ struct CreateControl
         for( int pos{ 0 }, j{ 0 }; j < h; ++j )
             for( int i{ 0 }; i < w; ++i, ++pos )
             {
-                if( ReferenceBitMap.Pixels[ pos ] == IGNORE_COLOUR ) continue;
+                if( ReferenceBitMap.Pixels[pos] == IGNORE_COLOUR ) continue;
 
                 // if ( ReferenceBitMap.Pixels[pos] &  REJECT_COLOUR )
                 // {
@@ -572,14 +572,14 @@ struct CreateControl
                 // if ( !Similar( GetPixel(VirtualDC, i, j), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
                 // return false;
 
-                if( (( REJECT_COLOUR & ReferenceBitMap.Pixels[ pos ] ) != 0 ) ==
-                    Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[ pos ], SimilarityThreshold ) )
+                if( ( ( REJECT_COLOUR & ReferenceBitMap.Pixels[pos] ) != 0 ) ==
+                    Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
                     return false;
             }
         return true;
     }
 
-    inline COLORREF GetColour( Point POINT_ ) { return CaptureRegion( POINT_, { 1, 1 } ).Pixels[ 0 ]; }
+    inline COLORREF GetColour( Point POINT_ ) { return CaptureRegion( POINT_, { 1, 1 } ).Pixels[0]; }
 
     inline COLORREF GetColour( int x, int y ) { return GetColour( { x, y } ); }
 

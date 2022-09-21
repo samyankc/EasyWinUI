@@ -51,6 +51,7 @@ struct TypeOf{
 #define Use_this_operator_to_check_object_type TypeOf{},
 #define TypeOf Use_this_operator_to_check_object_type
 
+
 #ifdef TEST_CODE
 #include <vector>
 
@@ -61,7 +62,7 @@ int main()
 
     DumpBinary( vec );
 
-    //TypeOf( rbegin );
+    TypeOf rbegin ;
     return 0;
 }
 
