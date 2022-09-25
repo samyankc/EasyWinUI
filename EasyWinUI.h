@@ -1,7 +1,6 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
-#include "EasyWinUI.h"
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <gdiplus.h>
@@ -64,6 +63,30 @@ namespace
                   << w10 << Msg.wParam << w10 << HIWORD( Msg.wParam ) << w10 << LOWORD( Msg.wParam )  //
                   << w10 << Msg.lParam << w10 << HIWORD( Msg.lParam ) << w10 << LOWORD( Msg.lParam )  //
                   << std::endl;
+    }
+
+    template<std::size_t N>
+    struct FixedString
+    {
+        char data[N];
+        constexpr FixedString( const char ( &Src )[N] ) : data{}
+        {
+            for( std::size_t i{ 0 }; i < N; ++i ) data[i] = Src[i];
+        }
+
+        constexpr operator const char*() const { return data; }
+    };
+
+    template<std::size_t N>
+    FixedString( const char ( & )[N] ) -> FixedString<N>;
+
+    template<FixedString TargetClassName>
+    bool MatchClass( HWND hwnd )
+    {
+        constexpr auto MaxBufferSize = 100;
+        char           Buffer[MaxBufferSize]{ 0 };
+        auto           ClassNameLength = GetClassName( hwnd, Buffer, MaxBufferSize );
+        return strcmp( TargetClassName, Buffer ) == 0;
     }
 }  // namespace
 
@@ -144,7 +167,7 @@ namespace EWUI
         std::optional<LPCSTR> ClassName{};
         std::optional<LPCSTR> Label{};
         std::optional<DWORD>  Style{ WS_VISIBLE | WS_CHILD | WS_TABSTOP };
-        std::optional<DWORD>  ExStyle{};
+        std::optional<DWORD>  ExStyle{ WS_EX_LEFT };
         std::optional<POINT>  Origin{};
         std::optional<SIZE>   Dimension{};
     };
@@ -203,11 +226,11 @@ namespace EWUI
 
     struct TextLabelControl : Control
     {
-        // TextLabel()
-        // {
-        //     this->ClassName( WC_STATIC );
-        //     this->RemoveStyle( WS_TABSTOP );
-        // }
+        constexpr TextLabelControl() noexcept
+        {
+            ClassName = WC_STATIC;
+            this->RemoveStyle( WS_TABSTOP );
+        }
 
         void operator=( std::string_view NewText )
         {
@@ -217,20 +240,16 @@ namespace EWUI
         }
     };
 
-    constexpr auto TextLabel = [] {
-        auto TextLabel = TextLabelControl{};
-        TextLabel.ClassName = WC_STATIC;
-        TextLabel.RemoveStyle( WS_TABSTOP );
-        return TextLabel;
-    }();
+    constexpr auto TextLabel = TextLabelControl{};
+
 
     struct CanvasControl : Control
     {
-        // Canvas()
-        // {
-        //     this->ClassName( WC_STATIC );
-        //     this->RemoveStyle( WS_TABSTOP );
-        // }
+        constexpr CanvasControl() noexcept
+        {
+            ClassName = WC_STATIC;
+            RemoveStyle( WS_TABSTOP );
+        }
 
         void Paint() const noexcept {}
 
@@ -245,45 +264,39 @@ namespace EWUI
         }
     };
 
-    constexpr auto Canvas = [] {
-        auto Canvas = CanvasControl{};
-        Canvas.ClassName = WC_STATIC;
-        Canvas.RemoveStyle( WS_TABSTOP );
-        return Canvas;
-    }();
+    constexpr auto Canvas = CanvasControl{};
 
     template<std::invocable ButtonEvent>
     struct ButtonControl : Control
     {
         ButtonEvent Action;
 
-        // constexpr ButtonControl(ButtonEvent Action_)
-        // {
-        //     Action = Action_;
-        //     // this->ClassName( WC_BUTTON );
-        //     // this->AddStyle( BS_PUSHBUTTON | BS_FLAT );
-        // }
+        constexpr ButtonControl( ButtonEvent Action_ ) noexcept
+        {
+            Action = Action_;
+            ClassName = WC_BUTTON;
+            AddStyle( BS_PUSHBUTTON | BS_FLAT );
+        }
 
         void Click() const noexcept { Action(); }
     };
 
-    constexpr auto Button = [] {
-        auto Button = ButtonControl<decltype( [] {} )>{};
-        Button.ClassName = WC_BUTTON;
-        Button.AddStyle( BS_PUSHBUTTON | BS_FLAT );
-        return Button;
-    }();
+    constexpr auto Button = ButtonControl{ [] {} };
+
 
     struct EditControl : Control
     {
-        EditControl() { *ClassName = WC_EDIT; }
+        constexpr EditControl() noexcept { ClassName = WC_EDIT; }
 
-        std::string Content()
+        std::string Content() const
         {
-            if( ! Handle || *Handle == NULL ) return {};
-            auto RequiredBufferSize = GetWindowTextLength( *Handle ) + 1;
-            auto ResultString = std::string( RequiredBufferSize, '\0' );
-            GetWindowText( *Handle, ResultString.data(), RequiredBufferSize );
+            auto ResultString = std::string{};
+            if( Handle && *Handle )
+            {
+                auto RequiredBufferSize = GetWindowTextLength( *Handle ) + 1;
+                ResultString.resize( RequiredBufferSize, '\0' );
+                GetWindowText( *Handle, ResultString.data(), RequiredBufferSize );
+            }
             return ResultString;
         }
 
@@ -294,23 +307,20 @@ namespace EWUI
         }
     };
 
-    struct TextBox : EditControl
-    {
-        using EditControl::operator=;
-        TextBox() { AddStyle( ES_AUTOHSCROLL | WS_BORDER ); }
-    };
+    constexpr auto TextBox = [] {
+        auto TextBox = EditControl{};
+        TextBox.AddStyle( ES_AUTOHSCROLL | WS_BORDER );
+        return TextBox;
+    }();
 
-    struct TextArea : EditControl
-    {
-        using EditControl::operator=;
-        TextArea()
-        {
-            AddStyle( WS_VSCROLL | ES_AUTOVSCROLL | ES_MULTILINE | ES_WANTRETURN );
-            AddExStyle( WS_EX_CONTROLPARENT );
-        }
-    };
+    constexpr auto TextArea = [] {
+        auto TextArea = EditControl{};
+        TextArea.AddStyle( WS_VSCROLL | ES_AUTOVSCROLL | ES_MULTILINE | ES_WANTRETURN );
+        TextArea.AddExStyle( WS_EX_CONTROLPARENT );
+        return TextArea;
+    }();
 
-    struct WindowControl : Control
+    struct GeneralWindowControl : Control
     {
         constexpr static SIZE ComponentSeparation{ 10, 10 };
         POINT                 ComponentOffset{ 0, 0 };
@@ -318,7 +328,7 @@ namespace EWUI
         // PAINTSTRUCT ps;
         // HDC hdc;
 
-        WindowControl( LPCSTR ClassName_, LPCSTR Label_ )
+        GeneralWindowControl( LPCSTR ClassName_, LPCSTR Label_ )
         {
             ClassName = ClassName_;
             Label = Label_;
@@ -429,10 +439,10 @@ namespace EWUI
         }
     };
 
-    struct Window : WindowControl
+    struct WindowControl : GeneralWindowControl
     {
-        Window( LPCSTR ClassName_ = {}, LPCSTR Label_ = {} )
-            : WindowControl( ( ClassName_ == NULL || strlen( ClassName_ ) == 0 ) ? "EWUI Window Class" : ClassName_,
+        WindowControl( LPCSTR ClassName_ = {}, LPCSTR Label_ = {} )
+            : GeneralWindowControl( ( ClassName_ == NULL || strlen( ClassName_ ) == 0 ) ? "EWUI Window Class" : ClassName_,
                              ( Label_ == NULL || strlen( Label_ ) == 0 ) ? "EWUI Window Title" : Label_ )
         {}
 
@@ -461,7 +471,7 @@ namespace EWUI
                     Msg.wParam = VK_TAB;
                 }
 
-                if( ! IsDialogMessage( this->Handle(), &Msg ) )
+                if( ! IsDialogMessage( *Handle, &Msg ) )
                 {
                     PrintMSG( ">>", Msg );
 
@@ -475,33 +485,38 @@ namespace EWUI
         operator int() const { return this->Activate(); }
     };
 
-    struct PopupWindow : WindowControl
+
+    struct PopupWindowControl : GeneralWindowControl
     {
-        PopupWindow( LPCSTR ClassName_ = {}, LPCSTR Label_ = {} )
-            : WindowControl(
+         PopupWindowControl( LPCSTR ClassName_ = {}, LPCSTR Label_ = {} )
+            : GeneralWindowControl(
                   ( ClassName_ == NULL || strlen( ClassName_ ) == 0 ) ? "EWUI Popup Window Class" : ClassName_,
                   ( Label_ == NULL || strlen( Label_ ) == 0 ) ? "EWUI Popup Window Title" : Label_ )
         {}
     };
 
-
-    //#define OptionalCopy( Field ) if( RHS.Field ) LHS.Field = RHS.Field
-    template<typename T = ControlConfiguration>
-    constexpr auto OptionalCopy( DerivedFrom<T> auto& LHS, DerivedFrom<T> auto&& RHS, auto T::*Field )
+    constexpr struct WindowType
     {
-        if( RHS.*Field ) LHS.*Field = RHS.*Field;
-    }
+    } Window;
+
+    constexpr struct PopupWindowType
+    {
+    } PopupWindow;
 
     template<typename T = ControlConfiguration>
     constexpr auto operator<<( DerivedFrom<T> auto LHS, DerivedFrom<T> auto&& RHS )
     {
-        OptionalCopy( LHS, RHS, &T::ClassName );
-        OptionalCopy( LHS, RHS, &T::Label );
-        OptionalCopy( LHS, RHS, &T::MenuID );
-        OptionalCopy( LHS, RHS, &T::Style );
-        OptionalCopy( LHS, RHS, &T::ExStyle );
-        OptionalCopy( LHS, RHS, &T::Origin );
-        OptionalCopy( LHS, RHS, &T::Dimension );
+        auto OptionalCopy = [&]( auto Field ) {
+            if( RHS.*Field ) LHS.*Field = RHS.*Field;
+        };
+
+        OptionalCopy( &T::ClassName );
+        OptionalCopy( &T::Label );
+        OptionalCopy( &T::MenuID );
+        OptionalCopy( &T::Style );
+        OptionalCopy( &T::ExStyle );
+        OptionalCopy( &T::Origin );
+        OptionalCopy( &T::Dimension );
 
         return LHS;
     }
@@ -509,7 +524,6 @@ namespace EWUI
     constexpr auto operator<<( DerivedFrom<ControlConfiguration> auto LHS, LPCSTR RHS )
     {
         LHS.Label = RHS;
-
         return LHS;
     }
 
