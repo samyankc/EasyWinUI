@@ -544,8 +544,8 @@ namespace EWUI
     }
 
 
-    [[nodiscard( "" )]] decltype( auto ) operator<<( const DerivedFrom<WindowControl> auto& LHS,
-                                                     const ControlConfiguration&            RHS )
+    [[nodiscard( "" )]] decltype( auto ) operator<<( DerivedFrom<WindowControl> auto& LHS,
+                                                     const ControlConfiguration&      RHS )
     {
         if( LHS.Handle )
         {
@@ -558,7 +558,7 @@ namespace EWUI
         }
     }
 
-    decltype( auto ) operator<<( const DerivedFrom<WindowControl> auto&& LHS, const ControlConfiguration& RHS )
+    decltype( auto ) operator<<( DerivedFrom<WindowControl> auto&& LHS, const ControlConfiguration& RHS )
     {
         if( LHS.Handle )
         {
@@ -571,17 +571,17 @@ namespace EWUI
         return std::forward<decltype( LHS )>( LHS );
     }
 
-    decltype( auto ) operator|( const DerivedFrom<WindowControl> auto&& LHS, DerivedFrom<Control> auto&& RHS )
+    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, DerivedFrom<Control> auto&& RHS )
     {
         return std::forward<decltype( LHS )>( LHS );
     }
 
-    decltype( auto ) operator|( const DerivedFrom<WindowControl> auto&& LHS, LPCSTR RHS )
+    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, LPCSTR RHS )
     {
         return std::forward<decltype( LHS )>( LHS ) | TextLabel << RHS;
     }
 
-    decltype( auto ) operator|( const DerivedFrom<WindowControl> auto&& LHS, LineBreaker )
+    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, LineBreaker )
     {
         return std::forward<decltype( LHS )>( LHS );
     }
