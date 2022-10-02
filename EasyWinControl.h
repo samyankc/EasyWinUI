@@ -45,11 +45,10 @@ auto Method = [&Object = Object]    \
 <typename... Ts>(Ts&&... Args)      \
 { return Object.Method( std::forward<Ts>(Args)...); }
 */
+constexpr inline int nMaxCount = 40;
+inline char          lpText[nMaxCount];
 
-constexpr int nMaxCount = 40;
-char          lpText[nMaxCount];
-
-void ShowHandleName( HWND hwnd )
+inline void ShowHandleName( HWND hwnd )
 {
     auto _hwnd = reinterpret_cast<unsigned long long>( hwnd );
     auto digits = []( unsigned long long n ) {
@@ -68,11 +67,12 @@ void ShowHandleName( HWND hwnd )
     std::cout << '\n';
 }
 
-void ShowAllChild( HWND hwnd )
+inline void ShowAllChild( HWND hwnd )
 {
     EnumChildWindows(
         hwnd,
         []( HWND hcwnd, LPARAM lParam ) -> int {
+            (void)lParam;
             std::cout << "\\ ";
             ShowHandleName( hcwnd );
             return true;
@@ -80,7 +80,7 @@ void ShowAllChild( HWND hwnd )
         0 );
 }
 
-HWND ObtainFocusHandle( int Delay = 2000 )
+inline HWND ObtainFocusHandle( int Delay = 2000 )
 {
     Sleep( Delay );
     HWND ret = GetFocus();
@@ -94,7 +94,7 @@ constexpr WPARAM operator"" _VK( char ch )
     return ch;
 }
 
-std::vector<HWND> GetWindowHandleByName( const char* name )
+inline std::vector<HWND> GetWindowHandleByName( const char* name )
 {
     std::vector<HWND> Handles;
     Handles.reserve( 4 );
@@ -117,7 +117,7 @@ std::vector<HWND> GetWindowHandleByName( const char* name )
     return Handles;
 }
 
-bool Similar( int a, int b, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+inline bool Similar( int a, int b, int SimilarityThreshold = SIMILARITY_THRESHOLD )
 {
     auto Delta = []( int x, int y ) { return ( x > y ) ? ( x - y ) : ( y - x ); };
     return Delta( GetRValue( a ), GetRValue( b ) ) <= SimilarityThreshold &&
@@ -205,7 +205,8 @@ struct ControlBitMap
         Point new_sentinel = { BoundRight, BoundBottom };
 
         if( new_prelim != prelim )
-            return FindMonochromeBlockLocal( MonochromeMap, new_prelim, new_sentinel );  // search in shrinked region
+            return FindMonochromeBlockLocal( MonochromeMap, new_prelim,
+                                             new_sentinel );  // search in shrinked region
         else
         {
             for( auto y = prelim.y(); y-- > BoundTop + 1; )
