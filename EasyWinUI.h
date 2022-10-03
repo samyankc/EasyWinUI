@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <vector>
 #include <windef.h>
 #include <winnt.h>
@@ -186,8 +187,8 @@ namespace EWUI
             return rect.bottom - rect.top;
         }
 
-        auto Style() const noexcept { return GetWindowLong( Handle, GWL_STYLE ); }
-        auto ExStyle() const noexcept { return GetWindowLong( Handle, GWL_EXSTYLE ); }
+        auto GetStyle() const noexcept { return GetWindowLong( Handle, GWL_STYLE ); }
+        auto GetExStyle() const noexcept { return GetWindowLong( Handle, GWL_EXSTYLE ); }
 
         auto ReSize( SIZE NewDimension ) const noexcept
         {
@@ -203,22 +204,22 @@ namespace EWUI
 
         auto AddStyle( DWORD NewStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_STYLE, Style() | NewStyle );
+            return SetWindowLong( Handle, GWL_STYLE, GetStyle() | NewStyle );
         }
 
         auto RemoveStyle( DWORD TargetStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_STYLE, Style() & ~TargetStyle );
+            return SetWindowLong( Handle, GWL_STYLE, GetStyle() & ~TargetStyle );
         }
 
         auto AddExStyle( DWORD NewExStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_EXSTYLE, ExStyle() | NewExStyle );
+            return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() | NewExStyle );
         }
 
         auto RemoveExStyle( DWORD TargetExStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_EXSTYLE, ExStyle() & ~TargetExStyle );
+            return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() & ~TargetExStyle );
         }
     };
 
@@ -370,6 +371,9 @@ namespace EWUI
 
     struct WindowControl : BasicWindowHandle
     {
+        SIZE  MaxWindowDimension{};
+        POINT AnchorOffset{};
+
         static HWND NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ )
         {
             HWND Handle;
@@ -406,74 +410,17 @@ namespace EWUI
             Handle = Source.Handle ? Source.Handle : NewWindow( "EWUI Window Class", "EWUI Window" );
         }
 
-        auto operator()( LPCSTR ClassName_ ) { return WindowControl( ClassName_ ); }
+        auto operator()( LPCSTR ClassName_ ) const { return WindowControl( ClassName_ ); }
 
-        // template<DerivedFrom<ControlConfiguration> T>
-        // decltype( auto ) operator<<( T&& Child_ )
-        // {
-        //     if( this->Handle() == NULL ) return static_cast<CRTP&>( *this );
-
-        //     Child_.Parent( this->Handle() );
-        //     if constexpr( DerivedFrom<T, WindowControl<std::decay_t<T>>> )  // pop up window
-        //     {
-        //         // Set Owner, not parent
-        //         SetWindowLongPtr( Child_.Handle(), GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>( Child_.Parent() ) );
-        //     }
-        //     else
-        //     {
-        //         if( Child_.Origin() == POINT{ 0, 0 } ) Child_.Origin( ComponentOffset );
-        //         ComponentOffset.x += Child_.Dimension().cx + ComponentSeparation.cx;
-        //         ComponentTotalSize.cy = std::max( ComponentTotalSize.cy, Child_.Origin().y + Child_.Dimension().cy );
-        //         ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, ComponentOffset.x + Child_.Dimension().cx );
-        //         Child_.Handle( CreateWindowEx( Child_.ExStyle(), Child_.ClassName(),          //
-        //                                        Child_.Label(), Child_.Style(),                //
-        //                                        Child_.Origin().x, Child_.Origin().y,          //
-        //                                        Child_.Dimension().cx, Child_.Dimension().cy,  //
-        //                                        Child_.Parent(), Child_.MenuID(), EWUI::EntryPointParamPack.hInstance,
-        //                                        NULL ) );
-
-        //         if constexpr( MatchType<T, Button> ) ActionContainer.RegisterAction( Child_.Handle(), Child_.Action() );
-
-        //         if constexpr( MatchType<T, Canvas> )
-        //             PainterContainer.RegisterAction( Child_.Handle(), Child_.Painter() );
-        //     }
-
-        //     return static_cast<CRTP&>( *this );
-        // }
-
-        // decltype( auto ) operator<<( std::string_view TextContent )
-        // {
-        //     SIZE TextContentDimension;
-        //     auto hdc = GetDC( this->Handle() );
-        //     GetTextExtentPoint32( hdc, TextContent.data(), TextContent.length(), &TextContentDimension );
-        //     ReleaseDC( this->Handle(), hdc );
-        //     return this->operator<<( TextLabel().Label( TextContent.data() ).Dimension( TextContentDimension ) );
-        // }
-
-        // decltype( auto ) operator<<( LineBreaker )
-        // {
-        //     ComponentOffset.y = ComponentTotalSize.cy + ComponentSeparation.cy;
-        //     ComponentOffset.x = ComponentSeparation.cx;
-        //     return static_cast<CRTP&>( *this );
-        // }
-
-        // decltype( auto ) operator<<( Spacer Spacer_ )
-        // {
-        //     ComponentOffset.x += Spacer_.x;
-        //     ComponentTotalSize.cx = std::max( ComponentTotalSize.cx, ComponentOffset.x );
-        //     return static_cast<CRTP&>( *this );
-        // }
-
-
-        void SetWindowVisibility( int nCmdShow ) noexcept
+        void SetWindowVisibility( int nCmdShow ) const noexcept
         {
             if( Handle ) ShowWindow( Handle, nCmdShow );
         }
 
-        void Show() noexcept { SetWindowVisibility( SW_SHOW ); }
-        void Hide() noexcept { SetWindowVisibility( SW_HIDE ); }
+        void Show() const noexcept { SetWindowVisibility( SW_SHOW ); }
+        void Hide() const noexcept { SetWindowVisibility( SW_HIDE ); }
 
-        void ToggleVisibility() noexcept
+        void ToggleVisibility() const noexcept
         {
             if( ! Handle ) return;
             if( GetWindowLong( Handle, GWL_STYLE ) & WS_VISIBLE )
@@ -528,7 +475,7 @@ namespace EWUI
     inline auto PopupWindow = PopupWindowControl{};
 
     template<DerivedFrom<ControlConfiguration> T>
-    constexpr decltype( auto ) operator<<( T LHS, T&& RHS )
+    constexpr decltype( auto ) operator<<( T&& LHS, T&& RHS )
     {
         constexpr auto OptionalCopy = [&]( auto... Fs ) { ( (void)( RHS.*Fs && ( LHS.*Fs = RHS.*Fs ) ), ... ); };
         using P = ControlConfiguration;
@@ -537,41 +484,63 @@ namespace EWUI
     }
 
     template<DerivedFrom<ControlConfiguration> T>
-    constexpr decltype( auto ) operator<<( T LHS, LPCSTR RHS )
+    constexpr decltype( auto ) operator<<( T&& LHS, LPCSTR RHS )
     {
-        LHS.Label = RHS;
-        return LHS;
-    }
-
-
-    [[nodiscard( "" )]] decltype( auto ) operator<<( DerivedFrom<WindowControl> auto& LHS,
-                                                     const ControlConfiguration&      RHS )
-    {
-        if( LHS.Handle )
+        if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
-            return std::move( LHS ) << RHS;
+            auto NewLHS = LHS;
+            return std::move( NewLHS ) << RHS;
         }
         else
         {
-            auto NewWindowControl = LHS;
-            return std::move( NewWindowControl ) << RHS;
+            LHS.Label = RHS;
+            return std::forward<T>( LHS );
         }
     }
 
-    decltype( auto ) operator<<( DerivedFrom<WindowControl> auto&& LHS, const ControlConfiguration& RHS )
+    template<DerivedFrom<WindowControl> T>
+    decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
-        if( LHS.Handle )
+        if( ! LHS.Handle ) return std::forward<T>( LHS );
+
+        if constexpr( std::is_const_v<std::remove_reference_t<T>> )
+        {
+            auto NewLHS = LHS;
+            return std::move( NewLHS ) << RHS;
+        }
+        else
         {
             if( RHS.Label ) SetWindowText( LHS.Handle, *RHS.Label );
             if( RHS.Style ) LHS.AddStyle( *RHS.Style );
             if( RHS.ExStyle ) LHS.AddExStyle( *RHS.ExStyle );
-            if( RHS.Dimension ) LHS.ReSize( *RHS.Dimension );
+            if( RHS.Dimension )
+            {
+                LHS.MaxWindowDimension.cx = std::max( LHS.MaxWindowDimension.cx, RHS.Dimension->cx );
+                LHS.MaxWindowDimension.cy = std::max( LHS.MaxWindowDimension.cy, RHS.Dimension->cy );
+                LHS.ReSize( LHS.MaxWindowDimension );
+            }
             if( RHS.Origin ) LHS.MoveTo( *RHS.Origin );
         }
-        return std::forward<decltype( LHS )>( LHS );
+        return std::forward<T>( LHS );
     }
 
     decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, DerivedFrom<Control> auto&& RHS )
+    {
+        if( ! LHS.Handle ) return std::forward<decltype( LHS )>( LHS );
+        constexpr auto DefaultControlSize = SIZE{ 200, 80 };
+
+        constexpr auto Read = []<typename O>( std::optional<O>& Field ) { return Field.value_or( O{} ); };
+
+        RHS.Handle = CreateWindowEx( Read( RHS.ExStyle ), Read( RHS.ClassName ),          //
+                                     Read( RHS.Label ), Read( RHS.Style ),                //
+                                     Read( RHS.Origin ).x, Read( RHS.Origin ).y,          //
+                                     Read( RHS.Dimension ).cx+10, Read( RHS.Dimension ).cy+10,  //
+                                     LHS.Handle, Read( RHS.MenuID ), EWUI::EntryPointParamPack.hInstance, NULL );
+
+        return std::forward<decltype( LHS )>( LHS );
+    }
+
+    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, DerivedFrom<WindowControl> auto&& RHS )
     {
         return std::forward<decltype( LHS )>( LHS );
     }
