@@ -1,7 +1,6 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
-
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <cstddef>
@@ -32,6 +31,17 @@ namespace
 {
     template<typename Derived, typename Base>
     concept DerivedFrom = std::is_base_of_v<std::decay_t<Base>, std::decay_t<Derived>>;
+
+    template<typename TestClass, template<typename> typename TemplateClass>
+    struct SpecializationOf_impl : std::false_type
+    {};
+
+    template<template<typename> typename TemplateClass, typename T>
+    struct SpecializationOf_impl<TemplateClass<T>, TemplateClass> : std::true_type
+    {};
+
+    template<typename TestClass, template<typename> typename TemplateClass>
+    concept SpecializationOf = SpecializationOf_impl<TestClass, TemplateClass>::value;
 
     template<typename TargetType, typename... CandidateTypes>
     concept MatchExactType = ( std::same_as<TargetType, CandidateTypes> || ... );
@@ -221,6 +231,9 @@ namespace EWUI
         {
             return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() & ~TargetExStyle );
         }
+
+
+        auto operator=( std::string_view IncomingContent ) { SetWindowText( Handle, IncomingContent.data() ); }
     };
 
     struct ControlConfiguration : BasicWindowHandle
@@ -324,12 +337,6 @@ namespace EWUI
             }
             return ResultString;
         }
-
-        void operator=( auto&& RHS )
-        {
-            auto IncomingContent = std::string_view{ RHS };
-            SetWindowText( Handle, IncomingContent.data() );
-        }
     };
 
     struct TextBoxControl : EditControl
@@ -352,14 +359,21 @@ namespace EWUI
     {
         ButtonEvent Action;
 
-        constexpr ButtonControl( ButtonEvent Action_ ) noexcept
+        constexpr ButtonControl( ButtonEvent Action_ ) noexcept : Action{ Action_ }
         {
-            Action = Action_;
             ClassName = WC_BUTTON;
             AddStyle( BS_PUSHBUTTON | BS_FLAT );
         }
 
         void Click() const noexcept { Action(); }
+
+        template<std::invocable NewButtonEvent>
+        constexpr auto operator<<( NewButtonEvent Action_ ) const noexcept
+        {
+            auto NewButton = ButtonControl<NewButtonEvent>{ Action_ };
+            NewButton << *this;
+            return NewButton;
+        }
     };
 
     constexpr auto TextLabel = TextLabelControl{};
@@ -368,11 +382,12 @@ namespace EWUI
     constexpr auto TextArea = TextAreaControl{};
     constexpr auto Button = ButtonControl{ [] {} };
 
-
     struct WindowControl : BasicWindowHandle
     {
+        constexpr static auto ChildSeparation = 20;
+
         SIZE  RequiredDimension{};
-        POINT AnchorOffset{};
+        POINT AnchorOffset{ ChildSeparation, ChildSeparation };
 
         static HWND NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ )
         {
@@ -433,6 +448,9 @@ namespace EWUI
         {
             if( ! Handle ) return 0;
 
+            ReSize( { RequiredDimension.cx + WindowControl::ChildSeparation,
+                      RequiredDimension.cy + 2 * WindowControl::ChildSeparation } );
+
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );
 
@@ -475,12 +493,19 @@ namespace EWUI
     inline auto PopupWindow = PopupWindowControl{};
 
     template<DerivedFrom<ControlConfiguration> T>
-    constexpr decltype( auto ) operator<<( T&& LHS, T&& RHS )
+    constexpr decltype( auto ) operator<<( T&& LHS, DerivedFrom<ControlConfiguration> auto&& RHS )
     {
-        constexpr auto OptionalCopy = [&]( auto... Fs ) { ( (void)( RHS.*Fs && ( LHS.*Fs = RHS.*Fs ) ), ... ); };
-        using P = ControlConfiguration;
-        OptionalCopy( &P::ClassName, &P::Label, &P::MenuID, &P::Style, &P::ExStyle, &P::Origin, &P::Dimension );
-        return LHS;
+        if constexpr( std::is_const_v<std::remove_reference_t<T>> )
+        {
+            return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
+        }
+        else
+        {
+            using P = ControlConfiguration;
+            auto OptionalCopy = [&]( auto... Fs ) { ( (void)( RHS.*Fs && ( LHS.*Fs = RHS.*Fs ) ), ... ); };
+            OptionalCopy( &P::ClassName, &P::Label, &P::MenuID, &P::Style, &P::ExStyle, &P::Origin, &P::Dimension );
+            return std::forward<T>( LHS );
+        }
     }
 
     template<DerivedFrom<ControlConfiguration> T>
@@ -488,9 +513,7 @@ namespace EWUI
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
-            auto NewLHS = LHS;
-            NewLHS.Label = RHS;
-            return NewLHS;
+            return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
         }
         else
         {
@@ -500,14 +523,21 @@ namespace EWUI
     }
 
     template<DerivedFrom<WindowControl> T>
+    decltype( auto ) operator<<( T&& LHS, LPCSTR RHS )
+    {
+        if( ! LHS.Handle ) return std::forward<T>( LHS );
+        SetWindowText( LHS.Handle, RHS );
+        return std::forward<T>( LHS );
+    }
+
+    template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
         if( ! LHS.Handle ) return std::forward<T>( LHS );
 
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
-            auto NewLHS = LHS;
-            return std::move( NewLHS ) << RHS;
+            return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
         }
         else
         {
@@ -524,21 +554,25 @@ namespace EWUI
     decltype( auto ) operator|( T&& LHS, DerivedFrom<Control> auto&& RHS )
     {
         if( ! LHS.Handle ) return std::forward<T>( LHS );
-        constexpr auto Read = []<typename U>( std::optional<U>& Field ) { return Field.value_or( U{} ); };
+        constexpr auto Read = []<typename U>( const std::optional<U>& Field ) { return Field.value_or( U{} ); };
 
-        constexpr auto DefaultControlSize = SIZE{ 200, 20 };
-        if( ! RHS.Dimension ) RHS.Dimension = DefaultControlSize;
+        auto ChildDimension = RHS.Dimension.value_or( SIZE{ 200, 20 } );
+        auto ChildOrigin = RHS.Origin.value_or( LHS.AnchorOffset );
 
-        if( ! RHS.Origin ) RHS.Origin = LHS.AnchorOffset;
+        LHS.RequiredDimension = { std::max( LHS.AnchorOffset.x += ChildDimension.cx + WindowControl::ChildSeparation,
+                                            LHS.RequiredDimension.cx ),
+                                  std::max( LHS.AnchorOffset.y + ChildDimension.cy + WindowControl::ChildSeparation,
+                                            LHS.RequiredDimension.cy ) };
 
-        LHS.RequiredDimension = { LHS.AnchorOffset.x += RHS.Dimension->cx,
-                                  std::max( LHS.AnchorOffset.y + RHS.Dimension->cy, LHS.RequiredDimension.cy ) };
+        auto Handle_ = CreateWindowEx( Read( RHS.ExStyle ), Read( RHS.ClassName ),  //
+                                       Read( RHS.Label ), Read( RHS.Style ),        //
+                                       ChildOrigin.x, ChildOrigin.y,                //
+                                       ChildDimension.cx, ChildDimension.cy,        //
+                                       LHS.Handle, Read( RHS.MenuID ), EWUI::EntryPointParamPack.hInstance, NULL );
 
-        RHS.Handle = CreateWindowEx( Read( RHS.ExStyle ), Read( RHS.ClassName ),          //
-                                     RHS.Label.value_or( "N/A" ), Read( RHS.Style ),      //
-                                     Read( RHS.Origin ).x, Read( RHS.Origin ).y,          //
-                                     Read( RHS.Dimension ).cx, Read( RHS.Dimension ).cy,  //
-                                     LHS.Handle, Read( RHS.MenuID ), EWUI::EntryPointParamPack.hInstance, NULL );
+        using ChildType = std::remove_reference_t<decltype( RHS )>;
+        if constexpr( ! std::is_const_v<ChildType> ) RHS.Handle = Handle_;
+        if constexpr( SpecializationOf<ChildType, ButtonControl> ) ActionContainer[Handle_] = RHS.Action;
 
         return std::forward<T>( LHS );
     }
@@ -546,19 +580,20 @@ namespace EWUI
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, DerivedFrom<WindowControl> auto&& RHS )
     {
+        (void)RHS;
         return std::forward<T>( LHS );
     }
 
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, LPCSTR RHS )
     {
-        return std::forward<T>( LHS ) | TextLabel << RHS;
+        return std::forward<T>( LHS ) | TextLabel << Dimension( { 40, 20 } ) << Label( RHS );
     }
 
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, LineBreaker )
     {
-        LHS.AnchorOffset = { 0, LHS.RequiredDimension.cy };
+        LHS.AnchorOffset = { WindowControl::ChildSeparation, LHS.RequiredDimension.cy };
         return std::forward<T>( LHS );
     }
 
