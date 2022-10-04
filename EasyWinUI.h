@@ -1,6 +1,7 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
+
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <cstddef>
@@ -23,7 +24,6 @@
 #include <vector>
 #include <windef.h>
 #include <winnt.h>
-
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -371,7 +371,7 @@ namespace EWUI
 
     struct WindowControl : BasicWindowHandle
     {
-        SIZE  MaxWindowDimension{};
+        SIZE  RequiredDimension{};
         POINT AnchorOffset{};
 
         static HWND NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ )
@@ -489,7 +489,8 @@ namespace EWUI
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
             auto NewLHS = LHS;
-            return std::move( NewLHS ) << RHS;
+            NewLHS.Label = RHS;
+            return NewLHS;
         }
         else
         {
@@ -513,46 +514,52 @@ namespace EWUI
             if( RHS.Label ) SetWindowText( LHS.Handle, *RHS.Label );
             if( RHS.Style ) LHS.AddStyle( *RHS.Style );
             if( RHS.ExStyle ) LHS.AddExStyle( *RHS.ExStyle );
-            if( RHS.Dimension )
-            {
-                LHS.MaxWindowDimension.cx = std::max( LHS.MaxWindowDimension.cx, RHS.Dimension->cx );
-                LHS.MaxWindowDimension.cy = std::max( LHS.MaxWindowDimension.cy, RHS.Dimension->cy );
-                LHS.ReSize( LHS.MaxWindowDimension );
-            }
+            if( RHS.Dimension ) LHS.ReSize( *RHS.Dimension );
             if( RHS.Origin ) LHS.MoveTo( *RHS.Origin );
         }
         return std::forward<T>( LHS );
     }
 
-    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, DerivedFrom<Control> auto&& RHS )
+    template<DerivedFrom<WindowControl> T>
+    decltype( auto ) operator|( T&& LHS, DerivedFrom<Control> auto&& RHS )
     {
-        if( ! LHS.Handle ) return std::forward<decltype( LHS )>( LHS );
-        constexpr auto DefaultControlSize = SIZE{ 200, 80 };
+        if( ! LHS.Handle ) return std::forward<T>( LHS );
+        constexpr auto Read = []<typename U>( std::optional<U>& Field ) { return Field.value_or( U{} ); };
 
-        constexpr auto Read = []<typename O>( std::optional<O>& Field ) { return Field.value_or( O{} ); };
+        constexpr auto DefaultControlSize = SIZE{ 200, 20 };
+        if( ! RHS.Dimension ) RHS.Dimension = DefaultControlSize;
+
+        if( ! RHS.Origin ) RHS.Origin = LHS.AnchorOffset;
+
+        LHS.RequiredDimension = { LHS.AnchorOffset.x += RHS.Dimension->cx,
+                                  std::max( LHS.AnchorOffset.y + RHS.Dimension->cy, LHS.RequiredDimension.cy ) };
 
         RHS.Handle = CreateWindowEx( Read( RHS.ExStyle ), Read( RHS.ClassName ),          //
-                                     Read( RHS.Label ), Read( RHS.Style ),                //
+                                     RHS.Label.value_or( "N/A" ), Read( RHS.Style ),      //
                                      Read( RHS.Origin ).x, Read( RHS.Origin ).y,          //
-                                     Read( RHS.Dimension ).cx+10, Read( RHS.Dimension ).cy+10,  //
+                                     Read( RHS.Dimension ).cx, Read( RHS.Dimension ).cy,  //
                                      LHS.Handle, Read( RHS.MenuID ), EWUI::EntryPointParamPack.hInstance, NULL );
 
-        return std::forward<decltype( LHS )>( LHS );
+        return std::forward<T>( LHS );
     }
 
-    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, DerivedFrom<WindowControl> auto&& RHS )
+    template<DerivedFrom<WindowControl> T>
+    decltype( auto ) operator|( T&& LHS, DerivedFrom<WindowControl> auto&& RHS )
     {
-        return std::forward<decltype( LHS )>( LHS );
+        return std::forward<T>( LHS );
     }
 
-    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, LPCSTR RHS )
+    template<DerivedFrom<WindowControl> T>
+    decltype( auto ) operator|( T&& LHS, LPCSTR RHS )
     {
-        return std::forward<decltype( LHS )>( LHS ) | TextLabel << RHS;
+        return std::forward<T>( LHS ) | TextLabel << RHS;
     }
 
-    decltype( auto ) operator|( DerivedFrom<WindowControl> auto&& LHS, LineBreaker )
+    template<DerivedFrom<WindowControl> T>
+    decltype( auto ) operator|( T&& LHS, LineBreaker )
     {
-        return std::forward<decltype( LHS )>( LHS );
+        LHS.AnchorOffset = { 0, LHS.RequiredDimension.cy };
+        return std::forward<T>( LHS );
     }
 
 

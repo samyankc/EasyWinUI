@@ -11,7 +11,7 @@
 
 namespace
 {
-    struct Notepad_
+    inline struct Notepad_
     {
         struct exe_
         {
@@ -91,6 +91,6 @@ namespace
         Notepad_& operator++( int );
     } Notepad{ "C:\\Windows\\System32\\notepad.exe", "Edit", SendMessage },
         NotepadPlusPlus{ "C:\\Program Files\\Notepad++\\notepad++.exe", "Scintilla", SendMessageW };
-    Notepad_& Notepad_::operator++( int ) { return NotepadPlusPlus; }
+    inline Notepad_& Notepad_::operator++( int ) { return NotepadPlusPlus; }
 }  // namespace
 #endif
