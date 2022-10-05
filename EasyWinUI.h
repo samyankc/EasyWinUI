@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <vector>
 #include <windef.h>
+#include <winnls.h>
 #include <winnt.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
@@ -116,7 +117,9 @@ namespace EWUI
 
     inline struct LineBreaker
     {
-    } LineBreak;
+    } LineBreak, NewLine;
+
+    constexpr auto AlwaysZero = 0L;
 
     constexpr auto EmptyAction = [] {};
     using ControlAction = std::function<void()>;
@@ -231,9 +234,6 @@ namespace EWUI
         {
             return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() & ~TargetExStyle );
         }
-
-
-        auto operator=( std::string_view IncomingContent ) { SetWindowText( Handle, IncomingContent.data() ); }
     };
 
     struct ControlConfiguration : BasicWindowHandle
@@ -278,11 +278,17 @@ namespace EWUI
         constexpr void AddExStyle( DWORD ExStyle_ ) noexcept { *ExStyle |= ExStyle_; }
         constexpr void RemoveExStyle( DWORD ExStyle_ ) noexcept { *ExStyle &= ~ExStyle_; }
 
-        constexpr Control()
+        constexpr Control() noexcept
         {
             Style = WS_VISIBLE | WS_CHILD | WS_TABSTOP;
             ExStyle = WS_EX_LEFT;
         }
+
+        auto SetLabel( std::string_view IncomingContent ) const noexcept
+        {
+            SetWindowText( Handle, IncomingContent.data() );
+        }
+        auto operator=( std::string_view IncomingContent ) const noexcept { return SetLabel( IncomingContent ); }
     };
 
     struct TextLabelControl : Control
@@ -293,12 +299,7 @@ namespace EWUI
             RemoveStyle( WS_TABSTOP );
         }
 
-        void operator=( std::string_view NewText )
-        {
-            if( ! Handle ) return;
-            Label = NewText.data();
-            SetWindowText( Handle, NewText.data() );
-        }
+        using Control::operator=;
     };
 
     struct CanvasControl : Control
@@ -326,7 +327,7 @@ namespace EWUI
     {
         constexpr EditControl() noexcept { ClassName = WC_EDIT; }
 
-        std::string Content() const
+        std::string Content() const noexcept
         {
             auto ResultString = std::string{};
             if( Handle )
@@ -337,21 +338,33 @@ namespace EWUI
             }
             return ResultString;
         }
+
+        using Control::operator=;
     };
 
     struct TextBoxControl : EditControl
     {
-        constexpr TextBoxControl() { AddStyle( ES_AUTOHSCROLL | WS_BORDER ); }
+        constexpr TextBoxControl() noexcept { AddStyle( ES_AUTOHSCROLL | WS_BORDER ); }
     };
-
 
     struct TextAreaControl : EditControl
     {
-        constexpr TextAreaControl()
+        constexpr TextAreaControl() noexcept
         {
             AddStyle( WS_VSCROLL | ES_AUTOVSCROLL | ES_MULTILINE | ES_WANTRETURN );
             AddExStyle( WS_EX_CONTROLPARENT );
         }
+    };
+
+    struct ProgressBarControl : Control
+    {
+        constexpr ProgressBarControl() noexcept { ClassName = PROGRESS_CLASS; }
+
+        auto Pause() const noexcept { SendMessage( Handle, PBM_SETSTATE, PBST_PAUSED, AlwaysZero ); }
+        auto Resume() const noexcept { SendMessage( Handle, PBM_SETSTATE, PBST_NORMAL, AlwaysZero ); }
+        auto Reset() const noexcept { SendMessage( Handle, PBM_SETPOS, 0, AlwaysZero ); }
+        auto SetMax( LPARAM NewMax = 100 ) const noexcept { SendMessage( Handle, PBM_SETRANGE32, 0, NewMax ); }
+        auto Advance( WPARAM Delta = 10 ) const noexcept { SendMessage( Handle, PBM_DELTAPOS, Delta, AlwaysZero ); }
     };
 
     template<std::invocable ButtonEvent>
@@ -380,6 +393,7 @@ namespace EWUI
     constexpr auto Canvas = CanvasControl{};
     constexpr auto TextBox = TextBoxControl{};
     constexpr auto TextArea = TextAreaControl{};
+    constexpr auto ProgressBar = ProgressBarControl{};
     constexpr auto Button = ButtonControl{ [] {} };
 
     struct WindowControl : BasicWindowHandle
