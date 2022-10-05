@@ -512,6 +512,7 @@ namespace EWUI
     inline constexpr auto PopupWindow = PopupWindowControl{};
 
     template<DerivedFrom<ControlConfiguration> T>
+    //constexpr decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     constexpr decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
@@ -528,12 +529,14 @@ namespace EWUI
     }
 
     template<DerivedFrom<BasicWindowHandle> T>
+    //constexpr decltype( auto ) operator<<( T&& LHS, LPCSTR RHS )
     constexpr decltype( auto ) operator<<( T&& LHS, LPCSTR RHS )
     {
         return std::forward<T>( LHS ) << Label( RHS );
     }
 
     template<DerivedFrom<WindowControl> T>
+    // decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )

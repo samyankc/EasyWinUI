@@ -22,7 +22,9 @@ COLORREF colour = Control.GetColour(x,y);
 #include <map>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
+#include <winnt.h>
 
 
 #define SIMILARITY_THRESHOLD 20
@@ -45,36 +47,35 @@ auto Method = [&Object = Object]    \
 <typename... Ts>(Ts&&... Args)      \
 { return Object.Method( std::forward<Ts>(Args)...); }
 */
-constexpr inline int nMaxCount = 40;
-inline char          lpText[nMaxCount];
+constexpr auto nMaxCount = 40;
 
-inline void ShowHandleName( HWND hwnd )
+inline auto ShowHandleName( HWND Handle )
 {
-    auto _hwnd = reinterpret_cast<unsigned long long>( hwnd );
-    auto digits = []( unsigned long long n ) {
+    auto int_Handle = reinterpret_cast<unsigned long long>( Handle );
+    char TextBuffer[nMaxCount];
+    auto digits = []( std::size_t number ) {
         for( int i = 1; i < 18; ++i )
-            if( ( n /= 10 ) == 0 ) return i;
+            if( ( number /= 10 ) == 0 ) return i;
         return 0;
     };
-    std::cout << _hwnd;
-    for( int i = 12 - digits( _hwnd ); i-- > 0; ) std::cout << ' ';
+    std::cout << int_Handle;
+    for( int i = 12 - digits( int_Handle ); i-- > 0; ) std::cout << ' ';
 
-    GetWindowText( hwnd, lpText, nMaxCount );
-    std::cout << "[ " << lpText << " ] ";
-    for( int i = 25 - strlen( lpText ); i-- > 0; ) std::cout << ' ';
-    GetClassName( hwnd, lpText, nMaxCount );
-    std::cout << "[ " << lpText << " ] ";
+    GetWindowText( Handle, TextBuffer, nMaxCount );
+    std::cout << "[ " << TextBuffer << " ] ";
+    for( int i = 25 - strlen( TextBuffer ); i-- > 0; ) std::cout << ' ';
+    GetClassName( Handle, TextBuffer, nMaxCount );
+    std::cout << "[ " << TextBuffer << " ] ";
     std::cout << '\n';
 }
 
-inline void ShowAllChild( HWND hwnd )
+inline void ShowAllChild( HWND Handle )
 {
     EnumChildWindows(
-        hwnd,
-        []( HWND hcwnd, LPARAM lParam ) -> int {
-            (void)lParam;
+        Handle,
+        []( HWND ChildHandle, LPARAM ) -> int {
             std::cout << "\\ ";
-            ShowHandleName( hcwnd );
+            ShowHandleName( ChildHandle );
             return true;
         },
         0 );
@@ -94,25 +95,23 @@ constexpr WPARAM operator"" _VK( char ch )
     return ch;
 }
 
-inline std::vector<HWND> GetWindowHandleByName( const char* name )
+inline std::vector<HWND> GetWindowHandleByName( LPCSTR Name )
 {
     std::vector<HWND> Handles;
     Handles.reserve( 4 );
 
-    struct DATA
-    {
-        std::vector<HWND>& Handles;
-        const char*        name;
-    } lParam{ Handles, name };
+    using DataPair = std::pair<LPCSTR, std::vector<HWND>&>;
+    auto Data = DataPair{ Name, Handles };
 
     EnumWindows(
-        []( HWND hwnd_, LPARAM lParam_ ) -> int {
-            DATA* lParam_ptr = reinterpret_cast<DATA*>( lParam_ );
-            GetClassName( hwnd_, lpText, nMaxCount );
-            if( strstr( lpText, lParam_ptr->name ) != NULL ) lParam_ptr->Handles.push_back( hwnd_ );
+        []( HWND Handle, LPARAM lParam_ ) -> int {
+            char TextBuffer[nMaxCount];
+            auto& [TargetName, Vec] = *reinterpret_cast<DataPair*>( lParam_ );
+            GetClassName( Handle, TextBuffer, nMaxCount );
+            if( std::string_view( TextBuffer ).contains( TargetName ) ) Vec.push_back( Handle );
             return true;
         },
-        reinterpret_cast<LPARAM>( &lParam ) );
+        reinterpret_cast<LPARAM>( &Data ) );
 
     return Handles;
 }
