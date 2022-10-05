@@ -358,7 +358,12 @@ namespace EWUI
 
     struct ProgressBarControl : Control
     {
-        constexpr ProgressBarControl() noexcept { ClassName = PROGRESS_CLASS; }
+        constexpr ProgressBarControl() noexcept
+        {
+            ClassName = PROGRESS_CLASS;
+            AddStyle( PBS_SMOOTH | PBS_SMOOTHREVERSE | PBS_MARQUEE );
+            RemoveStyle( WS_TABSTOP );
+        }
 
         auto Pause() const noexcept { SendMessage( Handle, PBM_SETSTATE, PBST_PAUSED, AlwaysZero ); }
         auto Resume() const noexcept { SendMessage( Handle, PBM_SETSTATE, PBST_NORMAL, AlwaysZero ); }
@@ -458,7 +463,7 @@ namespace EWUI
                 Show();
         }
 
-        int Activate() const
+        int Activate() const noexcept
         {
             if( ! Handle ) return 0;
 
@@ -489,7 +494,7 @@ namespace EWUI
             return static_cast<int>( Msg.wParam );
         }
 
-        operator int() const { return Activate(); }
+        operator int() const noexcept { return Activate(); }
     };
 
     struct PopupWindowControl : WindowControl
@@ -502,12 +507,12 @@ namespace EWUI
         }
     };
 
-    inline auto Window = WindowControl{};
+    inline constexpr auto Window = WindowControl{};
 
-    inline auto PopupWindow = PopupWindowControl{};
+    inline constexpr auto PopupWindow = PopupWindowControl{};
 
     template<DerivedFrom<ControlConfiguration> T>
-    constexpr decltype( auto ) operator<<( T&& LHS, DerivedFrom<ControlConfiguration> auto&& RHS )
+    constexpr decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
@@ -522,46 +527,31 @@ namespace EWUI
         }
     }
 
-    template<DerivedFrom<ControlConfiguration> T>
+    template<DerivedFrom<BasicWindowHandle> T>
     constexpr decltype( auto ) operator<<( T&& LHS, LPCSTR RHS )
     {
-        if constexpr( std::is_const_v<std::remove_reference_t<T>> )
-        {
-            return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
-        }
-        else
-        {
-            LHS.Label = RHS;
-            return std::forward<T>( LHS );
-        }
-    }
-
-    template<DerivedFrom<WindowControl> T>
-    decltype( auto ) operator<<( T&& LHS, LPCSTR RHS )
-    {
-        if( ! LHS.Handle ) return std::forward<T>( LHS );
-        SetWindowText( LHS.Handle, RHS );
-        return std::forward<T>( LHS );
+        return std::forward<T>( LHS ) << Label( RHS );
     }
 
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
-        if( ! LHS.Handle ) return std::forward<T>( LHS );
-
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
             return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
         }
         else
         {
+            if( ! LHS.Handle ) return std::forward<T>( LHS );
+
             if( RHS.Label ) SetWindowText( LHS.Handle, *RHS.Label );
             if( RHS.Style ) LHS.AddStyle( *RHS.Style );
             if( RHS.ExStyle ) LHS.AddExStyle( *RHS.ExStyle );
             if( RHS.Dimension ) LHS.ReSize( *RHS.Dimension );
             if( RHS.Origin ) LHS.MoveTo( *RHS.Origin );
+
+            return std::forward<T>( LHS );
         }
-        return std::forward<T>( LHS );
     }
 
     template<DerivedFrom<WindowControl> T>
@@ -594,7 +584,7 @@ namespace EWUI
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, DerivedFrom<WindowControl> auto&& RHS )
     {
-        (void)RHS;
+        SetWindowLongPtr( RHS.Handle, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>( LHS.Handle ) );
         return std::forward<T>( LHS );
     }
 
