@@ -4,7 +4,6 @@
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <cstddef>
-#include <gdiplus.h>
 
 #include <algorithm>
 #include <concepts>
@@ -14,16 +13,12 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <minwindef.h>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <type_traits>
 #include <vector>
-#include <windef.h>
-#include <winnls.h>
-#include <winnt.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -50,11 +45,11 @@ namespace
     template<typename TargetType, typename... CandidateTypes>
     concept MatchType = MatchExactType<std::decay_t<TargetType>, std::decay_t<CandidateTypes>...>;
 
-    template<MatchType<SIZE, POINT> T>
-    bool operator==( const T& LHS, const T& RHS )
-    {
-        return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
-    }
+    // template<MatchType<SIZE, POINT> T>
+    // bool operator==( const T& LHS, const T& RHS )
+    // {
+    //     return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
+    // }
 
     inline void PrintMSG( std::string_view PrefixString, MSG Msg )
     {
@@ -206,7 +201,8 @@ namespace EWUI
         auto ReSize( SIZE NewDimension ) const noexcept
         {
             SetWindowPos( Handle, HWND_NOTOPMOST, 0, 0, NewDimension.cx, NewDimension.cy,
-                          SWP_SHOWWINDOW | SWP_NOMOVE | SWP_NOZORDER );
+                          // SWP_SHOWWINDOW |
+                          SWP_NOMOVE | SWP_NOZORDER );
         }
 
         auto MoveTo( POINT NewPoint ) const noexcept

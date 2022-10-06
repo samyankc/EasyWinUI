@@ -24,6 +24,7 @@ COLORREF colour = Control.GetColour(x,y);
 #include <string>
 #include <utility>
 #include <vector>
+#include <windef.h>
 #include <winnt.h>
 
 
@@ -122,7 +123,10 @@ inline bool Similar( int a, int b, int SimilarityThreshold = SIMILARITY_THRESHOL
     return Delta( GetRValue( a ), GetRValue( b ) ) <= SimilarityThreshold &&
            Delta( GetGValue( a ), GetGValue( b ) ) <= SimilarityThreshold &&
            Delta( GetBValue( a ), GetBValue( b ) ) <= SimilarityThreshold;
-};
+}
+
+constexpr auto operator+( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x + RHS.x, LHS.y + RHS.y }; }
+constexpr auto operator-( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x - RHS.x, LHS.y - RHS.y }; }
 
 struct Point
 {
