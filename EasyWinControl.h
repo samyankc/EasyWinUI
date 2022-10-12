@@ -18,6 +18,7 @@ COLORREF colour = Control.GetColour(x,y);
 
 #include <cstring>
 #include <iomanip>
+#include <ios>
 #include <iostream>
 #include <map>
 #include <span>
@@ -52,22 +53,16 @@ constexpr auto nMaxCount = 40;
 
 inline auto ShowHandleName( HWND Handle )
 {
-    auto int_Handle = reinterpret_cast<unsigned long long>( Handle );
     char TextBuffer[nMaxCount];
-    auto digits = []( std::size_t number ) {
-        for( int i = 1; i < 18; ++i )
-            if( ( number /= 10 ) == 0 ) return i;
-        return 0;
-    };
-    std::cout << int_Handle;
-    for( int i = 12 - digits( int_Handle ); i-- > 0; ) std::cout << ' ';
+
+    std::cout << std::left << std::setw( 13 )  //
+              << std::hex << std::showbase << ( Handle );
 
     GetWindowText( Handle, TextBuffer, nMaxCount );
-    std::cout << "[ " << TextBuffer << " ] ";
-    for( int i = 25 - strlen( TextBuffer ); i-- > 0; ) std::cout << ' ';
+    std::cout << std::setw( 25 ) << TextBuffer << ' ';
+
     GetClassName( Handle, TextBuffer, nMaxCount );
-    std::cout << "[ " << TextBuffer << " ] ";
-    std::cout << '\n';
+    std::cout << "[ " << TextBuffer << " ] \n";
 }
 
 inline void ShowAllChild( HWND Handle )
@@ -101,21 +96,22 @@ inline std::vector<HWND> GetWindowHandleByName( LPCSTR Name )
     std::vector<HWND> Handles;
     Handles.reserve( 4 );
 
-    using DataPair = std::pair<LPCSTR, std::vector<HWND>&>;
-    auto Data = DataPair{ Name, Handles };
+    auto HandleSeeker = [&]( HWND Handle ) {
+        char TextBuffer[nMaxCount];
+        GetClassName( Handle, TextBuffer, nMaxCount );
+        if( std::string_view( TextBuffer ).contains( Name ) ) Handles.push_back( Handle );
+    };
 
     EnumWindows(
         []( HWND Handle, LPARAM lParam_ ) -> int {
-            char TextBuffer[nMaxCount];
-            auto& [TargetName, Vec] = *reinterpret_cast<DataPair*>( lParam_ );
-            GetClassName( Handle, TextBuffer, nMaxCount );
-            if( std::string_view( TextBuffer ).contains( TargetName ) ) Vec.push_back( Handle );
+            ( *reinterpret_cast<decltype( &HandleSeeker )>( lParam_ ) )( Handle );
             return true;
         },
-        reinterpret_cast<LPARAM>( &Data ) );
+        reinterpret_cast<LPARAM>( &HandleSeeker ) );
 
     return Handles;
 }
+
 
 inline bool Similar( int a, int b, int SimilarityThreshold = SIMILARITY_THRESHOLD )
 {
@@ -367,7 +363,7 @@ struct CreateControl
 
     CreateControl( const char* WindowName, const char* ControlName )
     {
-        std::vector<HWND> WindowHandles = GetWindowHandleByName( WindowName );
+        auto WindowHandles = GetWindowHandleByName( WindowName );
 
 #ifdef SHOWNAME
         for( auto& W : WindowHandles )
@@ -421,7 +417,7 @@ struct CreateControl
 
     inline void SendText( const char* Text ) { SendMessage( Handle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( Text ) ); }
 
-    Offset GetClientDimension()
+    SIZE GetClientDimension()
     {
         RECT ClientRect;
         GetClientRect( Handle, &ClientRect );
@@ -430,8 +426,8 @@ struct CreateControl
 
     void TranslatePoint( Point& Origin )
     {
-        static const auto ClientWidth = GetClientDimension().x();
-        static const auto ClientHeight = GetClientDimension().y();
+        static const auto ClientWidth = GetClientDimension().cx;
+        static const auto ClientHeight = GetClientDimension().cy;
         if( Origin.x() >= 0 && Origin.y() >= 0 ) return;
 
         Origin = Point{ Origin.x() + ( Origin.x() < 0 ) * ClientWidth, Origin.y() + ( Origin.y() < 0 ) * ClientHeight };
@@ -447,8 +443,8 @@ struct CreateControl
     {
         static const auto ScreenWidth = GetSystemMetrics( SM_CXSCREEN );
         static const auto ScreenHeight = GetSystemMetrics( SM_CYSCREEN );
-        static const auto ClientWidth = GetClientDimension().x();
-        static const auto ClientHeight = GetClientDimension().y();
+        static const auto ClientWidth = GetClientDimension().cx;
+        static const auto ClientHeight = GetClientDimension().cy;
         if( POINT ClientPoint{ long( PercentX * ClientWidth ), long( PercentY * ClientHeight ) };
             ClientToScreen( Handle, &ClientPoint ) )
         {

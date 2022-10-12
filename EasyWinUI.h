@@ -284,6 +284,19 @@ namespace EWUI
         {
             SetWindowText( Handle, IncomingContent.data() );
         }
+
+        auto Content() const noexcept
+        {
+            auto ResultString = std::string{};
+            if( Handle )
+            {
+                auto RequiredBufferSize = GetWindowTextLength( Handle ) + 1;
+                ResultString.resize( RequiredBufferSize, '\0' );
+                GetWindowText( Handle, ResultString.data(), RequiredBufferSize );
+            }
+            return ResultString;
+        }
+
         auto operator=( std::string_view IncomingContent ) const noexcept { return SetLabel( IncomingContent ); }
     };
 
@@ -323,18 +336,6 @@ namespace EWUI
     {
         constexpr EditControl() noexcept { ClassName = WC_EDIT; }
 
-        std::string Content() const noexcept
-        {
-            auto ResultString = std::string{};
-            if( Handle )
-            {
-                auto RequiredBufferSize = GetWindowTextLength( Handle ) + 1;
-                ResultString.resize( RequiredBufferSize, '\0' );
-                GetWindowText( Handle, ResultString.data(), RequiredBufferSize );
-            }
-            return ResultString;
-        }
-
         using Control::operator=;
     };
 
@@ -349,6 +350,16 @@ namespace EWUI
         {
             AddStyle( WS_VSCROLL | ES_AUTOVSCROLL | ES_MULTILINE | ES_WANTRETURN );
             AddExStyle( WS_EX_CONTROLPARENT );
+        }
+    };
+
+
+    struct ListViewControl : Control
+    {
+        constexpr ListViewControl() noexcept
+        {
+            ClassName = WC_LISTVIEW;
+            AddStyle( LVS_LIST | LVS_SINGLESEL );
         }
     };
 
