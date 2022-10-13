@@ -356,10 +356,14 @@ namespace EWUI
 
     struct ListViewControl : Control
     {
+
+
         constexpr ListViewControl() noexcept
         {
             ClassName = WC_LISTVIEW;
             AddStyle( LVS_LIST | LVS_SINGLESEL );
+
+
         }
     };
 
@@ -405,6 +409,7 @@ namespace EWUI
     constexpr auto Canvas = CanvasControl{};
     constexpr auto TextBox = TextBoxControl{};
     constexpr auto TextArea = TextAreaControl{};
+    constexpr auto ListView = ListViewControl{};
     constexpr auto ProgressBar = ProgressBarControl{};
     constexpr auto Button = ButtonControl{ [] {} };
 

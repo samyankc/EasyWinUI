@@ -1,3 +1,7 @@
+
+
+
+#define SHOWACTION
 /*
 
 Usage:
@@ -13,6 +17,7 @@ COLORREF colour = Control.GetColour(x,y);
 #define EASYWINCONTROL_H
 
 #include <EasyNotepad.h>
+#include <cstdint>
 #include <gdiplus.h>
 #include <Windows.h>
 
@@ -26,6 +31,7 @@ COLORREF colour = Control.GetColour(x,y);
 #include <utility>
 #include <vector>
 #include <windef.h>
+#include <wingdi.h>
 #include <winnt.h>
 
 
@@ -34,8 +40,9 @@ COLORREF colour = Control.GetColour(x,y);
 #define STRINGIFY_IMPL( s ) #s
 #define STRINGIFY( s ) STRINGIFY_IMPL( s )
 
-#define IGNORE_COLOUR 0x1000000
-#define REJECT_COLOUR 0x2000000  // EXCLUDE_COLOUR | 0xBBGGRR  ==>  all colours allowed except 0xBBGGRR ( exact match )
+#define IGNORE_COLOUR ( RGBQUAD{ .rgbReserved = 1 } )
+#define REJECT_COLOUR ( RGBQUAD{ .rgbReserved = 2 } )
+// EXCLUDE_COLOUR | 0xBBGGRR  ==>  all colours allowed except 0xBBGGRR ( exact match )
 
 //#define IGNORE_TEXT         "_WwWwWwW_"
 #define IGNORE_TEXT STRINGIFY( IGNORE_COLOUR )
@@ -113,138 +120,189 @@ inline std::vector<HWND> GetWindowHandleByName( LPCSTR Name )
 }
 
 
-inline bool Similar( int a, int b, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+inline bool Similar( int LHS, int RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
 {
-    auto Delta = []( int x, int y ) { return ( x > y ) ? ( x - y ) : ( y - x ); };
-    return Delta( GetRValue( a ), GetRValue( b ) ) <= SimilarityThreshold &&
-           Delta( GetGValue( a ), GetGValue( b ) ) <= SimilarityThreshold &&
-           Delta( GetBValue( a ), GetBValue( b ) ) <= SimilarityThreshold;
+    constexpr auto Delta = []( int x, int y ) { return ( x > y ) ? ( x - y ) : ( y - x ); };
+    return Delta( GetRValue( LHS ), GetRValue( RHS ) ) <= SimilarityThreshold &&
+           Delta( GetGValue( LHS ), GetGValue( RHS ) ) <= SimilarityThreshold &&
+           Delta( GetBValue( LHS ), GetBValue( RHS ) ) <= SimilarityThreshold;
+}
+
+inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+{
+    constexpr auto Delta = []( BYTE x, BYTE y ) { return ( x > y ) ? ( x - y ) : ( y - x ); };
+    return Delta( LHS.rgbBlue, RHS.rgbBlue ) <= SimilarityThreshold &&
+           Delta( LHS.rgbGreen, RHS.rgbGreen ) <= SimilarityThreshold &&
+           Delta( LHS.rgbRed, RHS.rgbRed ) <= SimilarityThreshold;
 }
 
 constexpr auto operator+( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x + RHS.x, LHS.y + RHS.y }; }
 constexpr auto operator-( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x - RHS.x, LHS.y - RHS.y }; }
+constexpr auto operator==( const POINT& LHS, const POINT& RHS ) { return LHS.x == RHS.x && LHS.y == RHS.y; }
+constexpr auto operator==( const SIZE& LHS, const SIZE& RHS ) { return LHS.cx == RHS.cx && LHS.cy == RHS.cy; }
 
-struct Point
+constexpr auto& operator+=( POINT& LHS, const SIZE& RHS )
 {
-    LPARAM POINT_DATA;
-    constexpr Point( LPARAM _src ) : POINT_DATA( _src ) {}
-    constexpr Point( int x, int y ) : POINT_DATA( MAKELPARAM( x, y ) ) {}
-    constexpr         operator LPARAM&() { return POINT_DATA; }
-    constexpr Point   operator-() const { return { -x(), -y() }; }
-    constexpr Point   operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
-    constexpr Point&  operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
-    constexpr int16_t x() const { return LOWORD( POINT_DATA ); }
-    constexpr int16_t y() const { return HIWORD( POINT_DATA ); }
-    constexpr friend bool operator==( const Point& lhs, const Point& rhs ) { return lhs.POINT_DATA == rhs.POINT_DATA; }
-};
-using Offset = Point;
+    LHS.x += RHS.cx;
+    LHS.y += RHS.cy;
+    return LHS;
+}
+
+constexpr auto& operator-=( POINT& LHS, const SIZE& RHS )
+{
+    LHS.x -= RHS.cx;
+    LHS.y -= RHS.cy;
+    return LHS;
+}
+
+constexpr auto Int_To_RGBQUAD( unsigned int n ) noexcept
+{
+    return RGBQUAD{ .rgbBlue = static_cast<BYTE>( n >> 000 & 0xFF ),   //
+                    .rgbGreen = static_cast<BYTE>( n >> 010 & 0xFF ),  //
+                    .rgbRed = static_cast<BYTE>( n >> 020 & 0xFF ),    //
+                    .rgbReserved = static_cast<BYTE>( n >> 030 & 0xFF ) };
+}
+
+constexpr auto RGBQUAD_To_Int( RGBQUAD c ) noexcept -> unsigned int
+{
+    return c.rgbBlue << 000 |   //
+           c.rgbGreen << 010 |  //
+           c.rgbRed << 020 |    //
+           c.rgbReserved << 030;
+}
+
+constexpr auto operator|( RGBQUAD LHS, RGBQUAD RHS ) noexcept
+{
+    return Int_To_RGBQUAD( RGBQUAD_To_Int( LHS ) | RGBQUAD_To_Int( RHS ) );
+}
+
+constexpr auto operator&( RGBQUAD LHS, RGBQUAD RHS ) noexcept
+{
+    return Int_To_RGBQUAD( RGBQUAD_To_Int( LHS ) & RGBQUAD_To_Int( RHS ) );
+}
+
+constexpr auto operator==( RGBQUAD LHS, RGBQUAD RHS ) noexcept
+{
+    return RGBQUAD_To_Int( LHS ) == RGBQUAD_To_Int( RHS );
+}
+
+// struct Point
+// {
+//     LPARAM POINT_DATA;
+//     constexpr Point( LPARAM _src ) : POINT_DATA( _src ) {}
+//     constexpr Point( int x, int y ) : POINT_DATA( MAKELPARAM( x, y ) ) {}
+//     constexpr         operator LPARAM&() { return POINT_DATA; }
+//     constexpr Point   operator-() const { return { -x(), -y() }; }
+//     constexpr Point   operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
+//     constexpr Point&  operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
+//     constexpr int16_t x() const { return LOWORD( POINT_DATA ); }
+//     constexpr int16_t y() const { return HIWORD( POINT_DATA ); }
+//     constexpr friend bool operator==( const Point& lhs, const Point& rhs ) { return lhs.POINT_DATA == rhs.POINT_DATA; }
+// };
+// using Offset = Point;
 
 struct ControlBitMap
 {
-    Point                 Origin;
-    Offset                Dimension;
-    BITMAPINFO            BI{};
-    std::vector<COLORREF> Pixels;
+    POINT                Origin;
+    SIZE                 Dimension;
+    BITMAPINFO           BI{};
+    std::vector<RGBQUAD> Pixels;
 
-    ControlBitMap( Point Origin_, Offset Dimension_ ) : Origin( Origin_ ), Dimension( Dimension_ )
+    ControlBitMap( POINT Origin_, SIZE Dimension_ ) : Origin( Origin_ ), Dimension( Dimension_ )
     {
         BI.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
-        BI.bmiHeader.biWidth = Dimension.x();
-        BI.bmiHeader.biHeight = -Dimension.y();
+        BI.bmiHeader.biWidth = Dimension.cx;
+        BI.bmiHeader.biHeight = -Dimension.cy;
         BI.bmiHeader.biPlanes = 1;
         BI.bmiHeader.biBitCount = 32;
         BI.bmiHeader.biSizeImage = 0;
         BI.bmiHeader.biCompression = BI_RGB;
 
-        Pixels.resize( Dimension.x() * Dimension.y() );
+        Pixels.resize( Dimension.cx * Dimension.cy );
     }
 
-    ControlBitMap IsolateColour( COLORREF KeepColour, COLORREF ColourMask = IGNORE_COLOUR,
+    ControlBitMap IsolateColour( RGBQUAD KeepColour, RGBQUAD ColourMask = IGNORE_COLOUR,
                                  int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
         ControlBitMap NewMap{ *this };
-        for( COLORREF& CurrentPixel : NewMap.Pixels )
+        for( auto&& CurrentPixel : NewMap.Pixels )
             if( ! Similar( CurrentPixel, KeepColour, SimilarityThreshold ) ) CurrentPixel = KeepColour | ColourMask;
         // else CurrentPixel = KeepColour;
         return NewMap;
     }
 
-    COLORREF GetColour( int x, int y ) { return Pixels[x + y * Dimension.x()]; }
+    RGBQUAD GetColour( int x, int y ) { return Pixels[x + y * Dimension.cx]; }
 
-    COLORREF& operator[]( const Point& CheckPoint ) { return Pixels[CheckPoint.x() + CheckPoint.y() * Dimension.x()]; }
+    RGBQUAD& operator[]( const POINT& CheckPoint ) { return Pixels[CheckPoint.x + CheckPoint.y * Dimension.cx]; }
 
-    Point FindMonochromeBlockLocal( const ControlBitMap& MonochromeMap, const Point prelim, const Point sentinel )
+    SIZE FindMonochromeBlockLocal( const ControlBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
     {
-        if( prelim.x() >= sentinel.x() || prelim.y() >= sentinel.y() ) return Dimension;
+        if( prelim.x >= sentinel.x || prelim.y >= sentinel.y ) return Dimension;
 
         auto Match = MonochromeMap.Pixels[0];
-        auto w = MonochromeMap.Dimension.x();
-        auto h = MonochromeMap.Dimension.y();
+        auto w = MonochromeMap.Dimension.cx;
+        auto h = MonochromeMap.Dimension.cy;
 
-        auto BoundLeft = prelim.x();
-        for( const auto limit = prelim.x() - w + 1;
-             BoundLeft-- > limit && GetColour( BoundLeft, prelim.y() ) == Match; )
+        auto BoundLeft = prelim.x;
+        for( const auto limit = prelim.x - w + 1; BoundLeft-- > limit && GetColour( BoundLeft, prelim.y ) == Match; )
             ;
 
-        auto BoundTop = prelim.y();
-        for( const auto limit = prelim.y() - h + 1; BoundTop-- > limit && GetColour( prelim.x(), BoundTop ) == Match; )
+        auto BoundTop = prelim.y;
+        for( const auto limit = prelim.y - h + 1; BoundTop-- > limit && GetColour( prelim.x, BoundTop ) == Match; )
             ;
 
-        auto BoundRight = prelim.x();
-        for( const auto limit = sentinel.x() - 1;
-             BoundRight++ < limit && GetColour( BoundRight, prelim.y() ) == Match; )
+        auto BoundRight = prelim.x;
+        for( const auto limit = sentinel.x - 1; BoundRight++ < limit && GetColour( BoundRight, prelim.y ) == Match; )
             ;
 
-        auto BoundBottom = prelim.y();
-        for( const auto limit = sentinel.y() - 1;
-             BoundBottom++ < limit && GetColour( prelim.x(), BoundBottom ) == Match; )
+        auto BoundBottom = prelim.y;
+        for( const auto limit = sentinel.y - 1; BoundBottom++ < limit && GetColour( prelim.x, BoundBottom ) == Match; )
             ;
 
-        Point new_prelim = { BoundLeft + w, BoundTop + h };
-        Point new_sentinel = { BoundRight, BoundBottom };
+        POINT new_prelim = { BoundLeft + w, BoundTop + h };
+        POINT new_sentinel = { BoundRight, BoundBottom };
 
         if( new_prelim != prelim )
             return FindMonochromeBlockLocal( MonochromeMap, new_prelim,
                                              new_sentinel );  // search in shrinked region
         else
         {
-            for( auto y = prelim.y(); y-- > BoundTop + 1; )
-                for( auto x = prelim.x(); x-- > BoundLeft + 1; )
+            for( auto y = prelim.y; y-- > BoundTop + 1; )
+                for( auto x = prelim.x; x-- > BoundLeft + 1; )
                     if( GetColour( x, y ) != Match )
                     {
                         // region #1: { prelim.x(), y+h }, new_sentinel ; everything below y
-                        auto LocalSearch =
-                            FindMonochromeBlockLocal( MonochromeMap, { prelim.x(), y + h }, new_sentinel );
+                        auto LocalSearch = FindMonochromeBlockLocal( MonochromeMap, { prelim.x, y + h }, new_sentinel );
                         if( LocalSearch != Dimension ) return LocalSearch;
 
                         // region #2: { x+w, prelim.y() }, { new_sentinel.x(), y+h-1 } ; to the right, exclude region #1
                         // overlap
-                        return FindMonochromeBlockLocal( MonochromeMap, { x + w, prelim.y() },
-                                                         { new_sentinel.x(), y + h } );
+                        return FindMonochromeBlockLocal( MonochromeMap, { x + w, prelim.y },
+                                                         { new_sentinel.x, y + h } );
                     }
             return { BoundLeft + 1, BoundTop + 1 };  // found
         }
     }
 
-    Point FindMonochromeBlock( const ControlBitMap& MonochromeMap )
+    SIZE FindMonochromeBlock( const ControlBitMap& MonochromeMap )
     // special use of ControlBitMap format, only use Dimension field & single element Pixels vector
     // eg. { {0,0},{102,140},{0x0F7F7F7} }
     {
         auto Match = MonochromeMap.Pixels[0];
-        auto w = MonochromeMap.Dimension.x();
-        auto h = MonochromeMap.Dimension.y();
+        auto w = MonochromeMap.Dimension.cx;
+        auto h = MonochromeMap.Dimension.cy;
 
         // disect entire region into sub regions
         // each preliminary check point separate w-1/h-1 apart => x_n + w = x_n+1
-        for( auto prelim_y = h - 1; prelim_y < Dimension.y(); prelim_y += h )
-            for( auto prelim_x = w - 1; prelim_x < Dimension.x(); prelim_x += w )
+        for( auto prelim_y = h - 1; prelim_y < Dimension.cy; prelim_y += h )
+            for( auto prelim_x = w - 1; prelim_x < Dimension.cx; prelim_x += w )
             {
                 if( GetColour( prelim_x, prelim_y ) != Match ) continue;
                 // main search starts here
                 auto LocalSearch =
                     FindMonochromeBlockLocal( MonochromeMap, { prelim_x, prelim_y },
-                                              { prelim_x + w < Dimension.x() ? prelim_x + w : Dimension.x(),
-                                                prelim_y + h < Dimension.y() ? prelim_y + h : Dimension.y() } );
+                                              { prelim_x + w < Dimension.cx ? prelim_x + w : Dimension.cx,
+                                                prelim_y + h < Dimension.cy ? prelim_y + h : Dimension.cy } );
                 if( LocalSearch != Dimension ) return LocalSearch;
             }
 
@@ -256,8 +314,8 @@ struct ControlBitMap
         if( CanvasHandle == NULL ) return;
         HDC hdc = GetDC( CanvasHandle );
 
-        SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.x(), Dimension.y(),  //
-                           0, 0, 0, Dimension.y(), Pixels.data(), &BI, DIB_RGB_COLORS );
+        SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.cx, Dimension.cy,  //
+                           0, 0, 0, Dimension.cy, Pixels.data(), &BI, DIB_RGB_COLORS );
 
         // for( int j = 0, pos = 0; j < Dimension.y(); ++j )
         //     for( int i = 0; i < Dimension.x(); ++i )
@@ -272,20 +330,21 @@ struct ControlBitMap
     {
         std::ostringstream OSS;
         OSS << "{";
-        OSS << "\n    {" << Origin.x() << "," << Origin.y() << "}, {" << Dimension.x() << "," << Dimension.y() << "},";
+        OSS << "\n    {" << Origin.x << "," << Origin.y << "}, {" << Dimension.cx << "," << Dimension.cy << "},";
         OSS << "\n    {";
-        for( int pos = 0, y = 0; y < Dimension.y(); ++y )
+        for( int pos = 0, y = 0; y < Dimension.cy; ++y )
         {
-            for( int x = 0; x < Dimension.x(); ++x, ++pos )
+            for( int x = 0; x < Dimension.cx; ++x, ++pos )
             {
-                if( x % Dimension.x() == 0 ) OSS << "\n    ";
+                if( x % Dimension.cx == 0 ) OSS << "\n    ";
 
-                if( Pixels[pos] & IGNORE_COLOUR )
+                if( ( Pixels[pos] & IGNORE_COLOUR ) == IGNORE_COLOUR )
                     OSS << IGNORE_TEXT;
                 else
-                    OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex << Pixels[pos];
+                    OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex
+                        << RGBQUAD_To_Int( Pixels[pos] );
 
-                if( pos < Dimension.x() * Dimension.y() - 1 ) OSS << " , ";
+                if( pos < Dimension.cx * Dimension.cy - 1 ) OSS << " , ";
             }
         }
         OSS << "\n    }";
@@ -424,18 +483,18 @@ struct CreateControl
         return { ClientRect.right, ClientRect.bottom };
     }
 
-    void TranslatePoint( Point& Origin )
+    void TranslatePOINT( POINT& Origin )
     {
         static const auto ClientWidth = GetClientDimension().cx;
         static const auto ClientHeight = GetClientDimension().cy;
-        if( Origin.x() >= 0 && Origin.y() >= 0 ) return;
+        if( Origin.x >= 0 && Origin.y >= 0 ) return;
 
-        Origin = Point{ Origin.x() + ( Origin.x() < 0 ) * ClientWidth, Origin.y() + ( Origin.y() < 0 ) * ClientHeight };
+        Origin = POINT{ Origin.x + ( Origin.x < 0 ) * ClientWidth, Origin.y + ( Origin.y < 0 ) * ClientHeight };
     }
 
-    Point TranslatePoint( Point&& Origin )
+    POINT TranslatePOINT( POINT&& Origin )
     {
-        TranslatePoint( Origin );
+        TranslatePOINT( Origin );
         return Origin;
     }
 
@@ -445,8 +504,11 @@ struct CreateControl
         static const auto ScreenHeight = GetSystemMetrics( SM_CYSCREEN );
         static const auto ClientWidth = GetClientDimension().cx;
         static const auto ClientHeight = GetClientDimension().cy;
-        if( POINT ClientPoint{ long( PercentX * ClientWidth ), long( PercentY * ClientHeight ) };
-            ClientToScreen( Handle, &ClientPoint ) )
+        // thread safe initialisation may cause performance issue
+        // need modification
+
+        auto ClientPoint = POINT{ .x = long( PercentX * ClientWidth ), .y = long( PercentY * ClientHeight ) };
+        if( ClientToScreen( Handle, &ClientPoint ) )
         {
             mouse_event( MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP,
                          ClientPoint.x * 65535 / ScreenWidth, ClientPoint.y * 65535 / ScreenHeight, 0, 0 );
@@ -465,60 +527,68 @@ struct CreateControl
                       << " full height ) failed.\n";
     }
 
-    inline void Click( int x, int y, int Repeat = 1 ) { Click( { x, y }, Repeat ); }
+    inline auto MouseLeftEvent( UINT Msg, POINT Point ) const
+    {
+        return SendMessage( Handle, Msg, MK_LBUTTON, MAKELPARAM( Point.x, Point.y ) );
+    }
+    inline auto MouseLeftDown( POINT Point ) const { return MouseLeftEvent( WM_LBUTTONDOWN, Point ); }
+    inline auto MouseLeftMove( POINT Point ) const { return MouseLeftEvent( WM_MOUSEMOVE, Point ); }
+    inline auto MouseLeftUp( POINT Point ) const { return MouseLeftEvent( WM_LBUTTONUP, Point ); }
 
-    inline void Click( Point POINT_, int Repeat = 1 )
+
+    inline void Click( POINT Point, unsigned Repeat = 1 ) const
     {
 #ifdef SHOWACTION
-        std::cout << "[ Click (" << POINT.x() << ", " << POINT.y() << ") ]" << endl;
+        std::cout << "[ Click (" << Point.x << ", " << Point.y << ") ]" << std::endl;
 #endif
-        for( int i = Repeat; i-- > 0; )
+        while( Repeat-- )
         {
-            SendMessage( Handle, WM_LBUTTONDOWN, MK_LBUTTON, POINT_ );
+            MouseLeftDown( Point );
             Sleep( ClickDuration );
-            SendMessage( Handle, WM_LBUTTONUP, MK_LBUTTON, POINT_ );
+            MouseLeftUp( Point );
             Sleep( ClickDelay );
         }
     }
+    inline void Click( int x, int y, unsigned Repeat = 1 ) const { Click( POINT{ x, y }, Repeat ); }
 
-    inline void Drag( Point POINT_1, Point POINT_2, bool SmoothDrag = true )
+    inline void Drag( POINT POINT_1, POINT POINT_2, bool SmoothDrag = true ) const
     {
 #ifdef SHOWACTION
-        std::cout << "[ Drag (" << POINT_1.x() << ", " << POINT_1.y() << ")";
-        std::cout << "    To (" << POINT_2.x() << ", " << POINT_2.y() << ") ]" << endl;
+        std::cout << "[ Drag (" << POINT_1.x << ", " << POINT_1.y << ")"
+                  << "    To (" << POINT_2.x << ", " << POINT_2.y << ") ]" << std::endl;
 #endif
 
-        SendMessage( Handle, WM_LBUTTONDOWN, MK_LBUTTON, POINT_1 );
+        MouseLeftDown( POINT_1 );
         Sleep( ClickDelay );
 
         if( SmoothDrag )
         {
             constexpr auto Displacement = 8;
 
-            auto IntervalCount = std::max( std::abs( ( POINT_2.x() - POINT_1.x() ) / Displacement ),  //
-                                           std::abs( ( POINT_2.y() - POINT_1.y() ) / Displacement ) );
-            auto Delta = Offset{ ( POINT_2.x() - POINT_1.x() ) / IntervalCount,  //
-                                 ( POINT_2.y() - POINT_1.y() ) / IntervalCount };
+            auto IntervalCount = std::max( std::abs( ( POINT_2.x - POINT_1.x ) / Displacement ),  //
+                                           std::abs( ( POINT_2.y - POINT_1.y ) / Displacement ) );
+            auto Interval = SIZE{ ( POINT_2.x - POINT_1.x ) / IntervalCount,  //
+                                  ( POINT_2.y - POINT_1.y ) / IntervalCount };
 
             auto CurrentPoint = POINT_1;
             for( auto i = 0; i < IntervalCount; ++i )
             {
-                SendMessage( Handle, WM_MOUSEMOVE, MK_LBUTTON, CurrentPoint );
-                CurrentPoint += Delta;
+                MouseLeftMove( CurrentPoint );
+                CurrentPoint += Interval;
 #ifdef SHOWACTION
-                std::cout << "    To (" << CurrentPoint.x() << ", " << CurrentPoint.y() << ")" << endl;
+                std::cout << "    To (" << CurrentPoint.x << ", " << CurrentPoint.y << ")" << std::endl;
 #endif
                 Sleep( 10 );
             }
         }
-        SendMessage( Handle, WM_MOUSEMOVE, MK_LBUTTON, POINT_2 );
+        MouseLeftMove( POINT_2 );
         Sleep( ClickDelay );
-        SendMessage( Handle, WM_LBUTTONUP, MK_LBUTTON, POINT_2 );
+        MouseLeftUp( POINT_2 );
     }
 
-    ControlBitMap CaptureRegion( Point Origin, Offset Dimension ) const
+    ControlBitMap CaptureRegion( POINT Origin, SIZE Dimension ) const
     {
-        int x{ Origin.x() }, y{ Origin.y() }, w{ Dimension.x() }, h{ Dimension.y() };
+        int x{ Origin.x }, y{ Origin.y }, w{ Dimension.cx }, h{ Dimension.cy };
 
         ControlBitMap BitMap( Origin, Dimension );
 
@@ -550,8 +620,13 @@ struct CreateControl
 
     inline bool MatchBitMap( const ControlBitMap& ReferenceBitMap, int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
-        int x{ ReferenceBitMap.Origin.x() }, y{ ReferenceBitMap.Origin.y() }, w{ ReferenceBitMap.Dimension.x() },
-            h{ ReferenceBitMap.Dimension.y() };
+
+    //  need complete re-work
+    // capture whole image than compare
+
+
+        int x{ ReferenceBitMap.Origin.x }, y{ ReferenceBitMap.Origin.y },  //
+            w{ ReferenceBitMap.Dimension.cx }, h{ ReferenceBitMap.Dimension.cy };
 
         HDC  hdcSource = GetDC( Handle );
         auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
@@ -572,16 +647,16 @@ struct CreateControl
                 // if ( !Similar( GetPixel(VirtualDC, i, j), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
                 // return false;
 
-                if( ( ( REJECT_COLOUR & ReferenceBitMap.Pixels[pos] ) != 0 ) ==
-                    Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
+                //if( ( RGBQUAD_To_Int( REJECT_COLOUR & ReferenceBitMap.Pixels[pos] ) != 0 ) ==
+                 //   Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
                     return false;
             }
         return true;
     }
 
-    inline COLORREF GetColour( Point POINT_ ) { return CaptureRegion( POINT_, { 1, 1 } ).Pixels[0]; }
+    inline RGBQUAD GetColour( POINT Point ) { return CaptureRegion( Point, { 1, 1 } ).Pixels[0]; }
 
-    inline COLORREF GetColour( int x, int y ) { return GetColour( { x, y } ); }
+    inline RGBQUAD GetColour( int x, int y ) { return GetColour( { x, y } ); }
 
     void Run( void ( *Proc )( CreateControl& ) ) { Proc( *this ); }
     //#define Run(Proc) Run( (void (*)(CreateControl&)) Proc )
