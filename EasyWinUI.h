@@ -356,14 +356,10 @@ namespace EWUI
 
     struct ListViewControl : Control
     {
-
-
         constexpr ListViewControl() noexcept
         {
             ClassName = WC_LISTVIEW;
             AddStyle( LVS_LIST | LVS_SINGLESEL );
-
-
         }
     };
 
@@ -431,7 +427,7 @@ namespace EWUI
             wc.hbrBackground = reinterpret_cast<HBRUSH>( COLOR_WINDOW );
             wc.lpszClassName = ClassName_;
 
-            if( ! RegisterClassEx( &wc ) )
+            if( ! RegisterClassEx( &wc ) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS )
                 return MessageBox( NULL, "Window Registration Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK ), nullptr;
 
             Handle = CreateWindowEx( WS_EX_LEFT | WS_EX_DLGMODALFRAME,  //

@@ -104,9 +104,44 @@ inline std::vector<HWND> GetWindowHandleByName( LPCSTR Name )
     Handles.reserve( 4 );
 
     auto HandleSeeker = [&]( HWND Handle ) {
+        auto FoundBy = [=]( auto NameExtractor ) {
+            char TextBuffer[nMaxCount];
+            NameExtractor( Handle, TextBuffer, nMaxCount );
+            return std::string_view( TextBuffer ).contains( Name );
+        };
+        if( FoundBy( GetClassName ) || FoundBy( GetWindowText ) ) Handles.push_back( Handle );
+    };
+
+    EnumWindows(
+        []( HWND Handle, LPARAM lParam_ ) -> int {
+            ( *reinterpret_cast<decltype( &HandleSeeker )>( lParam_ ) )( Handle );
+            return true;
+        },
+        reinterpret_cast<LPARAM>( &HandleSeeker ) );
+
+    return Handles;
+}
+
+inline std::vector<HWND> GetWindowHandleByName_( LPCSTR Name )
+{
+    std::vector<HWND> Handles;
+    Handles.reserve( 4 );
+
+    auto HandleSeeker = [&]( HWND Handle ) {
         char TextBuffer[nMaxCount];
         GetClassName( Handle, TextBuffer, nMaxCount );
-        if( std::string_view( TextBuffer ).contains( Name ) ) Handles.push_back( Handle );
+        if( std::string_view( TextBuffer ).contains( Name ) )
+        {
+            Handles.push_back( Handle );
+        }
+        else
+        {
+            GetWindowText( Handle, TextBuffer, nMaxCount );
+            if( std::string_view( TextBuffer ).contains( Name ) )
+            {
+                Handles.push_back( Handle );
+            }
+        };
     };
 
     EnumWindows(
@@ -620,9 +655,8 @@ struct CreateControl
 
     inline bool MatchBitMap( const ControlBitMap& ReferenceBitMap, int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
-
-    //  need complete re-work
-    // capture whole image than compare
+        //  need complete re-work
+        // capture whole image than compare
 
 
         int x{ ReferenceBitMap.Origin.x }, y{ ReferenceBitMap.Origin.y },  //
@@ -648,8 +682,8 @@ struct CreateControl
                 // return false;
 
                 //if( ( RGBQUAD_To_Int( REJECT_COLOUR & ReferenceBitMap.Pixels[pos] ) != 0 ) ==
-                 //   Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
-                    return false;
+                //   Similar( GetPixel( VirtualDC, i, j ), ReferenceBitMap.Pixels[pos], SimilarityThreshold ) )
+                return false;
             }
         return true;
     }
