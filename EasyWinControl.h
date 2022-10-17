@@ -1,6 +1,10 @@
 
 
 
+#include <algorithm>
+#include <iterator>
+#include <ratio>
+#include <string_view>
 #define SHOWACTION
 /*
 
@@ -63,7 +67,7 @@ inline auto ShowHandleName( HWND Handle )
     char TextBuffer[nMaxCount];
 
     std::cout << std::left << std::setw( 13 )  //
-              << std::hex << std::showbase << ( Handle );
+              << std::hex << std::showbase << ( Handle ) << std::dec;
 
     GetWindowText( Handle, TextBuffer, nMaxCount );
     std::cout << std::setw( 25 ) << TextBuffer << ' ';
@@ -98,7 +102,7 @@ constexpr WPARAM operator"" _VK( char ch )
     return ch;
 }
 
-inline std::vector<HWND> GetWindowHandleByName( LPCSTR Name )
+inline auto GetWindowHandleByName_( std::string_view Name )
 {
     std::vector<HWND> Handles;
     Handles.reserve( 4 );
@@ -122,38 +126,30 @@ inline std::vector<HWND> GetWindowHandleByName( LPCSTR Name )
     return Handles;
 }
 
-inline std::vector<HWND> GetWindowHandleByName_( LPCSTR Name )
+inline auto GetWindowHandleByName( std::string_view Name )
 {
-    std::vector<HWND> Handles;
-    Handles.reserve( 4 );
-
-    auto HandleSeeker = [&]( HWND Handle ) {
-        char TextBuffer[nMaxCount];
-        GetClassName( Handle, TextBuffer, nMaxCount );
-        if( std::string_view( TextBuffer ).contains( Name ) )
-        {
-            Handles.push_back( Handle );
-        }
-        else
-        {
-            GetWindowText( Handle, TextBuffer, nMaxCount );
-            if( std::string_view( TextBuffer ).contains( Name ) )
-            {
-                Handles.push_back( Handle );
-            }
-        };
-    };
+    std::vector<HWND> Results, Handles;
+    Results.reserve( 4 );
+    Handles.reserve( 256 );
 
     EnumWindows(
         []( HWND Handle, LPARAM lParam_ ) -> int {
-            ( *reinterpret_cast<decltype( &HandleSeeker )>( lParam_ ) )( Handle );
+            reinterpret_cast<std::vector<HWND>*>( lParam_ )->push_back( Handle );
             return true;
         },
-        reinterpret_cast<LPARAM>( &HandleSeeker ) );
+        reinterpret_cast<LPARAM>( &Handles ) );
 
-    return Handles;
+    auto FoundBy = [=]( auto NameExtractor, HWND Handle ) {
+        char TextBuffer[nMaxCount];
+        NameExtractor( Handle, TextBuffer, nMaxCount );
+        return std::string_view( TextBuffer ).contains( Name );
+    };
+
+    std::ranges::copy_if( Handles, std::back_inserter( Results ), [=]( auto Handle ) {
+        return FoundBy( GetClassName, Handle ) || FoundBy( GetWindowText, Handle );
+    } );
+    return Results;
 }
-
 
 inline bool Similar( int LHS, int RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
 {
@@ -373,7 +369,7 @@ struct ControlBitMap
             {
                 if( x % Dimension.cx == 0 ) OSS << "\n    ";
 
-                if( ( Pixels[pos] & IGNORE_COLOUR ) == IGNORE_COLOUR )
+                if( Pixels[pos].rgbReserved == IGNORE_COLOUR.rgbReserved )
                     OSS << IGNORE_TEXT;
                 else
                     OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex
@@ -455,7 +451,7 @@ struct CreateControl
 
     CreateControl( const CreateControl& _Control ) = default;
 
-    CreateControl( const char* WindowName, const char* ControlName )
+    CreateControl( std::string_view WindowName, std::string_view ControlName )
     {
         auto WindowHandles = GetWindowHandleByName( WindowName );
 
@@ -472,7 +468,7 @@ struct CreateControl
         {
             case 0 : Handle = NULL; return;
             case 1 :
-                Handle = FindWindowEx( WindowHandles[0], NULL, ControlName, NULL );
+                Handle = FindWindowEx( WindowHandles[0], NULL, ControlName.data(), NULL );
                 if( Handle == NULL ) Handle = WindowHandles[0];
                 break;
             default :
@@ -487,7 +483,7 @@ struct CreateControl
                 std::cin >> choice;
                 std::cout << "Chosen: ";
                 ShowHandleName( WindowHandles[choice] );
-                Handle = FindWindowEx( WindowHandles[choice], NULL, ControlName, NULL );
+                Handle = FindWindowEx( WindowHandles[choice], NULL, ControlName.data(), NULL );
                 break;
             }
         }
@@ -632,21 +628,7 @@ struct CreateControl
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
 
-        // BITMAP ResultantBitMap;
-        // GetObject(VirtualDC.hBMP, sizeof(BITMAP), &ResultantBitMap);
-
-
-        // auto BitMapAsBytes = std::as_writable_bytes(std::span(BitMap.Pixels.begin(),BitMap.Pixels.end()));
-        // auto InvertedBitMapBytes = std::vector<std::byte>(BitMapAsBytes.size());
-
-        // GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, InvertedBitMapBytes.data(), &BitMap.BI, DIB_RGB_COLORS );
-
-        // std::copy(InvertedBitMapBytes.rbegin(),InvertedBitMapBytes.rend(),BitMapAsBytes.begin());
-        // for (auto& v : BitMap.Pixels) v >>= 8;
-
-
         GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BitMap.BI, DIB_RGB_COLORS );
-        //for( auto& C : BitMap.Pixels ) C = ( GetRValue( C ) << 16 ) | ( GetGValue( C ) << 8 ) | GetBValue( C );
 
         ReleaseDC( Handle, hdcSource );
 
