@@ -120,7 +120,7 @@ namespace EWUI
     using ControlAction = std::function<void()>;
     inline std::map<HWND, ControlAction> ActionContainer;
 
-    using ByteVector = std::vector<std::byte>;
+    using ByteVector = std::vector<BYTE>;
     using CanvasContent = std::pair<BITMAPINFO, ByteVector>;
     inline std::map<HWND, CanvasContent> CanvasContainer;
 
@@ -147,9 +147,9 @@ namespace EWUI
             }
             break;
             case WM_COMMAND :
-                if( ! ActionContainer.contains( reinterpret_cast<HWND>( lParam ) ) )
+                if( ! ActionContainer.contains( std::bit_cast<HWND>( lParam ) ) )
                     return DefWindowProc( hwnd, msg, wParam, lParam );
-                std::thread( ActionContainer[reinterpret_cast<HWND>( lParam )] ).detach();
+                std::thread( ActionContainer[std::bit_cast<HWND>( lParam )] ).detach();
                 break;
             case WM_CLOSE :
                 if( GetWindow( hwnd, GW_OWNER ) == NULL )
@@ -352,7 +352,6 @@ namespace EWUI
         }
     };
 
-
     struct ListViewControl : Control
     {
         constexpr ListViewControl() noexcept
@@ -361,6 +360,31 @@ namespace EWUI
             AddStyle( LVS_LIST | LVS_SINGLESEL );
         }
     };
+
+    struct ListBoxControl : Control
+    {
+        using DataContainer = std::vector<                                                        //
+            std::pair<std::invoke_result_t<decltype( SendMessage ), HWND, UINT, WPARAM, LPARAM>,  //
+                      std::string>>;
+
+        constexpr ListBoxControl() noexcept
+        {
+            ClassName = WC_LISTBOX;
+            AddStyle( LBS_USETABSTOPS | LBS_WANTKEYBOARDINPUT | LBS_HASSTRINGS );
+        }
+
+        void operator<<( const DataContainer& Source )
+        {
+            if( ! Handle ) return;
+            for( auto&& [ItemData, DisplayString] : Source )
+            {
+                auto ListIndex =
+                    SendMessage( Handle, LB_ADDSTRING, AlwaysZero, std::bit_cast<LPARAM>( DisplayString.c_str() ) );
+                SendMessage( Handle, LB_SETITEMDATA, ListIndex, std::bit_cast<LPARAM>( ItemData ) );
+            }
+        };
+    };
+
 
     struct ProgressBarControl : Control
     {
@@ -404,6 +428,7 @@ namespace EWUI
     constexpr auto Canvas = CanvasControl{};
     constexpr auto TextBox = TextBoxControl{};
     constexpr auto TextArea = TextAreaControl{};
+    constexpr auto ListBox = ListBoxControl{};
     constexpr auto ListView = ListViewControl{};
     constexpr auto ProgressBar = ProgressBarControl{};
     constexpr auto Button = ButtonControl{ [] {} };
@@ -594,7 +619,7 @@ namespace EWUI
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, DerivedFrom<WindowControl> auto&& RHS )
     {
-        SetWindowLongPtr( RHS.Handle, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>( LHS.Handle ) );
+        SetWindowLongPtr( RHS.Handle, GWLP_HWNDPARENT, std::bit_cast<LONG_PTR>( LHS.Handle ) );
         return std::forward<T>( LHS );
     }
 

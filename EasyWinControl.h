@@ -21,10 +21,10 @@ COLORREF colour = Control.GetColour(x,y);
 #ifndef EASYWINCONTROL_H
 #define EASYWINCONTROL_H
 
-#include <EasyNotepad.h>
+//#include <EasyNotepad.h>
 #include <cstdint>
-#include <gdiplus.h>
 #include <Windows.h>
+#include <gdiplus.h>
 
 #include <cstring>
 #include <iomanip>
@@ -73,23 +73,22 @@ inline auto ShowHandleName( HWND Handle )
     std::cout << std::left << std::setw( 13 )  //
               << std::hex << std::showbase << ( Handle ) << std::dec;
 
-    GetWindowText( Handle, TextBuffer, nMaxCount );
-    std::cout << std::setw( 25 ) << TextBuffer << ' ';
-
     GetClassName( Handle, TextBuffer, nMaxCount );
+    std::cout << std::setw( 32 ) << std::string( "[ " ) + TextBuffer + " ]" << ' ';
+
+    GetWindowText( Handle, TextBuffer, nMaxCount );
     std::cout << "[ " << TextBuffer << " ] \n";
 }
 
 inline void ShowAllChild( HWND Handle )
 {
-    EnumChildWindows(
-        Handle,
-        []( HWND ChildHandle, LPARAM ) -> int {
-            std::cout << "\\ ";
-            ShowHandleName( ChildHandle );
-            return true;
-        },
-        0 );
+    EnumChildWindows( Handle,
+                      []( HWND ChildHandle, LPARAM ) -> int {
+                          std::cout << "\\ ";
+                          ShowHandleName( ChildHandle );
+                          return true;
+                      },
+                      {} );
 }
 
 inline HWND ObtainFocusHandle( int Delay = 2000 )
@@ -106,31 +105,7 @@ constexpr WPARAM operator"" _VK( char ch )
     return ch;
 }
 
-inline auto GetWindowHandleByName_( std::string_view Name )
-{
-    std::vector<HWND> Handles;
-    Handles.reserve( 4 );
-
-    auto HandleSeeker = [&]( HWND Handle ) {
-        auto FoundBy = [=]( auto NameExtractor ) {
-            char TextBuffer[nMaxCount];
-            NameExtractor( Handle, TextBuffer, nMaxCount );
-            return std::string_view( TextBuffer ).contains( Name );
-        };
-        if( FoundBy( GetClassName ) || FoundBy( GetWindowText ) ) Handles.push_back( Handle );
-    };
-
-    EnumWindows(
-        []( HWND Handle, LPARAM lParam_ ) -> int {
-            ( *reinterpret_cast<decltype( &HandleSeeker )>( lParam_ ) )( Handle );
-            return true;
-        },
-        reinterpret_cast<LPARAM>( &HandleSeeker ) );
-
-    return Handles;
-}
-
-inline auto GetWindowHandleByName( std::string_view Name )
+inline auto GetWindowHandleAll()
 {
     std::vector<HWND> Handles;
     Handles.reserve( 256 );
@@ -142,6 +117,12 @@ inline auto GetWindowHandleByName( std::string_view Name )
         },
         reinterpret_cast<LPARAM>( &Handles ) );
 
+    return Handles;
+}
+
+inline auto GetWindowHandleByName( std::string_view Name )
+{
+    auto Handles = GetWindowHandleAll();
     auto NotFoundBy = [=]( auto... NameExtractors ) {
         return [=]( HWND Handle ) {
             auto FoundBy = [=]( auto NameExtractor ) {
@@ -152,22 +133,29 @@ inline auto GetWindowHandleByName( std::string_view Name )
             return ! ( FoundBy( NameExtractors ) || ... );
         };
     };
-
     std::erase_if( Handles, NotFoundBy( GetClassName, GetWindowText ) );
-
-    // std::ranges::copy_if( Handles, std::back_inserter( Results ), [=]( HWND Handle ) {
-    //     auto FoundBy = [=]( auto NameExtractor ) {
-    //         char TextBuffer[nMaxCount];
-    //         NameExtractor( Handle, TextBuffer, nMaxCount );
-    //         return std::string_view( TextBuffer ).contains( Name );
-    //     };
-    //     return FoundBy( GetClassName ) || FoundBy( GetWindowText );
-    // } );
-
     return Handles;
 }
 
-inline bool Similar( int LHS, int RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+inline auto GetWindowHandleByName_( std::string_view Name )
+{
+    auto Handles = GetWindowHandleAll();
+    auto Results = decltype( Handles ){};
+    std::ranges::copy_if( Handles, std::back_inserter( Results ),  //
+                          [=]( HWND Handle ) {
+                              auto FoundBy = [=]( auto NameExtractor ) {
+                                  char TextBuffer[nMaxCount];
+                                  NameExtractor( Handle, TextBuffer, nMaxCount );
+                                  return std::string_view( TextBuffer ).contains( Name );
+                              };
+                              return FoundBy( GetClassName ) || FoundBy( GetWindowText );
+                          } );
+    return Results;
+}
+
+[[deprecated( "use alternative overload version" )]]  //
+inline bool
+Similar( int LHS, int RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
 {
     constexpr auto Delta = []( int x, int y ) { return ( x > y ) ? ( x - y ) : ( y - x ); };
     return Delta( GetRValue( LHS ), GetRValue( RHS ) ) <= SimilarityThreshold &&
