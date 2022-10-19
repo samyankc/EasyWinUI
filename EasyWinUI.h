@@ -290,9 +290,8 @@ namespace EWUI
             auto ResultString = std::string{};
             if( Handle )
             {
-                auto RequiredBufferSize = GetWindowTextLength( Handle ) + 1;
-                ResultString.resize( RequiredBufferSize, '\0' );
-                GetWindowText( Handle, ResultString.data(), RequiredBufferSize );
+                ResultString.resize( GetWindowTextLength( Handle ), '\0' );
+                GetWindowText( Handle, ResultString.data(), ResultString.length() + 1 );
             }
             return ResultString;
         }

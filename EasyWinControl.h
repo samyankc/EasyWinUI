@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iterator>
 #include <ratio>
+#include <bit>
 #include <string_view>
 #define SHOWACTION
 /*
@@ -44,15 +45,18 @@ COLORREF colour = Control.GetColour(x,y);
 #define STRINGIFY_IMPL( s ) #s
 #define STRINGIFY( s ) STRINGIFY_IMPL( s )
 
-#define IGNORE_COLOUR ( RGBQUAD{ .rgbReserved = 1 } )
-#define REJECT_COLOUR ( RGBQUAD{ .rgbReserved = 2 } )
+// #define IGNORE_COLOUR ( RGBQUAD{ .rgbReserved = 1 } )
+// #define REJECT_COLOUR ( RGBQUAD{ .rgbReserved = 2 } )
 // EXCLUDE_COLOUR | 0xBBGGRR  ==>  all colours allowed except 0xBBGGRR ( exact match )
 
 //#define IGNORE_TEXT         "_WwWwWwW_"
-#define IGNORE_TEXT STRINGIFY( IGNORE_COLOUR )
-#define _WwWwW_ IGNORE_COLOUR
-#define _WwWwWwW_ IGNORE_COLOUR
+// #define IGNORE_TEXT STRINGIFY( IGNORE_COLOUR )
+// #define _WwWwW_ IGNORE_COLOUR
+// #define _WwWwWwW_ IGNORE_COLOUR
 
+constexpr auto IGNORE_COLOUR = decltype( std::declval<RGBQUAD>().rgbReserved ){ 1 };
+constexpr auto REJECT_COLOUR = decltype( std::declval<RGBQUAD>().rgbReserved ){ 2 };
+constexpr auto IGNORE_TEXT = "_WwWwWwW_";
 //#define Associate(Object,Method) auto Method = std::bind_front(&decltype(Object)::Method, &Object)
 /*
 #define Associate(Object,Method)    \
@@ -60,7 +64,7 @@ auto Method = [&Object = Object]    \
 <typename... Ts>(Ts&&... Args)      \
 { return Object.Method( std::forward<Ts>(Args)...); }
 */
-constexpr auto nMaxCount = 40;
+constexpr auto nMaxCount = 400;
 
 inline auto ShowHandleName( HWND Handle )
 {
@@ -128,8 +132,7 @@ inline auto GetWindowHandleByName_( std::string_view Name )
 
 inline auto GetWindowHandleByName( std::string_view Name )
 {
-    std::vector<HWND> Results, Handles;
-    Results.reserve( 4 );
+    std::vector<HWND> Handles;
     Handles.reserve( 256 );
 
     EnumWindows(
@@ -139,16 +142,29 @@ inline auto GetWindowHandleByName( std::string_view Name )
         },
         reinterpret_cast<LPARAM>( &Handles ) );
 
-    auto FoundBy = [=]( auto NameExtractor, HWND Handle ) {
-        char TextBuffer[nMaxCount];
-        NameExtractor( Handle, TextBuffer, nMaxCount );
-        return std::string_view( TextBuffer ).contains( Name );
+    auto NotFoundBy = [=]( auto... NameExtractors ) {
+        return [=]( HWND Handle ) {
+            auto FoundBy = [=]( auto NameExtractor ) {
+                char TextBuffer[nMaxCount];
+                NameExtractor( Handle, TextBuffer, nMaxCount );
+                return std::string_view( TextBuffer ).contains( Name );
+            };
+            return ! ( FoundBy( NameExtractors ) || ... );
+        };
     };
 
-    std::ranges::copy_if( Handles, std::back_inserter( Results ), [=]( auto Handle ) {
-        return FoundBy( GetClassName, Handle ) || FoundBy( GetWindowText, Handle );
-    } );
-    return Results;
+    std::erase_if( Handles, NotFoundBy( GetClassName, GetWindowText ) );
+
+    // std::ranges::copy_if( Handles, std::back_inserter( Results ), [=]( HWND Handle ) {
+    //     auto FoundBy = [=]( auto NameExtractor ) {
+    //         char TextBuffer[nMaxCount];
+    //         NameExtractor( Handle, TextBuffer, nMaxCount );
+    //         return std::string_view( TextBuffer ).contains( Name );
+    //     };
+    //     return FoundBy( GetClassName ) || FoundBy( GetWindowText );
+    // } );
+
+    return Handles;
 }
 
 inline bool Similar( int LHS, int RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
@@ -188,18 +204,20 @@ constexpr auto& operator-=( POINT& LHS, const SIZE& RHS )
 
 constexpr auto Int_To_RGBQUAD( unsigned int n ) noexcept
 {
-    return RGBQUAD{ .rgbBlue = static_cast<BYTE>( n >> 000 & 0xFF ),   //
-                    .rgbGreen = static_cast<BYTE>( n >> 010 & 0xFF ),  //
-                    .rgbRed = static_cast<BYTE>( n >> 020 & 0xFF ),    //
-                    .rgbReserved = static_cast<BYTE>( n >> 030 & 0xFF ) };
+    return std::bit_cast<RGBQUAD>( n );
+    // return RGBQUAD{ .rgbBlue = static_cast<BYTE>( n >> 000 & 0xFF ),   //
+    //                 .rgbGreen = static_cast<BYTE>( n >> 010 & 0xFF ),  //
+    //                 .rgbRed = static_cast<BYTE>( n >> 020 & 0xFF ),    //
+    //                 .rgbReserved = static_cast<BYTE>( n >> 030 & 0xFF ) };
 }
 
 constexpr auto RGBQUAD_To_Int( RGBQUAD c ) noexcept -> unsigned int
 {
-    return c.rgbBlue << 000 |   //
-           c.rgbGreen << 010 |  //
-           c.rgbRed << 020 |    //
-           c.rgbReserved << 030;
+    return std::bit_cast<unsigned int>( c );
+    // return c.rgbBlue << 000 |   //
+    //        c.rgbGreen << 010 |  //
+    //        c.rgbRed << 020 |    //
+    //        c.rgbReserved << 030;
 }
 
 constexpr auto operator|( RGBQUAD LHS, RGBQUAD RHS ) noexcept
@@ -252,7 +270,7 @@ struct ControlBitMap
         Pixels.resize( Dimension.cx * Dimension.cy );
     }
 
-    ControlBitMap IsolateColour( RGBQUAD KeepColour, RGBQUAD ColourMask = IGNORE_COLOUR,
+    ControlBitMap IsolateColour( RGBQUAD KeepColour, auto ColourMask = IGNORE_COLOUR,
                                  int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
         ControlBitMap NewMap{ *this };
@@ -369,7 +387,7 @@ struct ControlBitMap
             {
                 if( x % Dimension.cx == 0 ) OSS << "\n    ";
 
-                if( Pixels[pos].rgbReserved == IGNORE_COLOUR.rgbReserved )
+                if( Pixels[pos].rgbReserved == IGNORE_COLOUR )
                     OSS << IGNORE_TEXT;
                 else
                     OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex
@@ -653,7 +671,7 @@ struct CreateControl
         for( int pos{ 0 }, j{ 0 }; j < h; ++j )
             for( int i{ 0 }; i < w; ++i, ++pos )
             {
-                if( ReferenceBitMap.Pixels[pos] == IGNORE_COLOUR ) continue;
+                if( ReferenceBitMap.Pixels[pos].rgbReserved == IGNORE_COLOUR ) continue;
 
                 // if ( ReferenceBitMap.Pixels[pos] &  REJECT_COLOUR )
                 // {
