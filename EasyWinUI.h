@@ -363,9 +363,8 @@ namespace EWUI
 
     struct ListBoxControl : Control
     {
-        using DataContainer = std::vector<                                                        //
-            std::pair<std::invoke_result_t<decltype( SendMessage ), HWND, UINT, WPARAM, LPARAM>,  //
-                      std::string>>;
+        using DataContainer = std::vector<
+            std::pair<std::invoke_result_t<decltype( SendMessage ), HWND, UINT, WPARAM, LPARAM>, std::string>>;
 
         constexpr ListBoxControl() noexcept
         {
@@ -383,6 +382,12 @@ namespace EWUI
                 SendMessage( Handle, LB_SETITEMDATA, ListIndex, std::bit_cast<LPARAM>( ItemData ) );
             }
         };
+
+        auto Selection()
+        {
+            auto SelectedIndex = SendMessage( Handle, LB_GETCURSEL, AlwaysZero, AlwaysZero );
+            return SendMessage( Handle, LB_GETITEMDATA, SelectedIndex, AlwaysZero );
+        }
     };
 
 

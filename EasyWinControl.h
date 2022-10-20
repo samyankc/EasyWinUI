@@ -54,7 +54,7 @@ COLORREF colour = Control.GetColour(x,y);
 // #define _WwWwW_ IGNORE_COLOUR
 // #define _WwWwWwW_ IGNORE_COLOUR
 
-constexpr auto IGNORE_COLOUR = decltype( std::declval<RGBQUAD>().rgbReserved ){ 1 };
+constexpr auto IGNORE_PIXEL = decltype( std::declval<RGBQUAD>().rgbReserved ){ 1 };
 constexpr auto REJECT_COLOUR = decltype( std::declval<RGBQUAD>().rgbReserved ){ 2 };
 constexpr auto IGNORE_TEXT = "_WwWwWwW_";
 //#define Associate(Object,Method) auto Method = std::bind_front(&decltype(Object)::Method, &Object)
@@ -190,23 +190,9 @@ constexpr auto& operator-=( POINT& LHS, const SIZE& RHS )
     return LHS;
 }
 
-constexpr auto Int_To_RGBQUAD( unsigned int n ) noexcept
-{
-    return std::bit_cast<RGBQUAD>( n );
-    // return RGBQUAD{ .rgbBlue = static_cast<BYTE>( n >> 000 & 0xFF ),   //
-    //                 .rgbGreen = static_cast<BYTE>( n >> 010 & 0xFF ),  //
-    //                 .rgbRed = static_cast<BYTE>( n >> 020 & 0xFF ),    //
-    //                 .rgbReserved = static_cast<BYTE>( n >> 030 & 0xFF ) };
-}
+constexpr auto Int_To_RGBQUAD( unsigned int n ) noexcept { return std::bit_cast<RGBQUAD>( n ); }
 
-constexpr auto RGBQUAD_To_Int( RGBQUAD c ) noexcept -> unsigned int
-{
-    return std::bit_cast<unsigned int>( c );
-    // return c.rgbBlue << 000 |   //
-    //        c.rgbGreen << 010 |  //
-    //        c.rgbRed << 020 |    //
-    //        c.rgbReserved << 030;
-}
+constexpr auto RGBQUAD_To_Int( RGBQUAD c ) noexcept { return std::bit_cast<unsigned int>( c ); }
 
 constexpr auto operator|( RGBQUAD LHS, RGBQUAD RHS ) noexcept
 {
@@ -238,32 +224,34 @@ constexpr auto operator==( RGBQUAD LHS, RGBQUAD RHS ) noexcept
 // };
 // using Offset = Point;
 
-struct ControlBitMap
+struct EasyBitMap
 {
     POINT                Origin;
     SIZE                 Dimension;
-    BITMAPINFO           BI{};
+    BITMAPINFO           BitMapInformation{};
     std::vector<RGBQUAD> Pixels;
 
-    ControlBitMap( POINT Origin_, SIZE Dimension_ ) : Origin( Origin_ ), Dimension( Dimension_ )
+    EasyBitMap( POINT Origin_, SIZE Dimension_ ) : Origin( Origin_ ), Dimension( Dimension_ )
     {
-        BI.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
-        BI.bmiHeader.biWidth = Dimension.cx;
-        BI.bmiHeader.biHeight = -Dimension.cy;
-        BI.bmiHeader.biPlanes = 1;
-        BI.bmiHeader.biBitCount = 32;
-        BI.bmiHeader.biSizeImage = 0;
-        BI.bmiHeader.biCompression = BI_RGB;
+        BitMapInformation.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
+        BitMapInformation.bmiHeader.biWidth = Dimension.cx;
+        BitMapInformation.bmiHeader.biHeight = -Dimension.cy;
+        BitMapInformation.bmiHeader.biPlanes = 1;
+        BitMapInformation.bmiHeader.biBitCount = 32;
+        BitMapInformation.bmiHeader.biSizeImage = 0;
+        BitMapInformation.bmiHeader.biCompression = BI_RGB;
 
         Pixels.resize( Dimension.cx * Dimension.cy );
     }
 
-    ControlBitMap IsolateColour( RGBQUAD KeepColour, auto ColourMask = IGNORE_COLOUR,
-                                 int SimilarityThreshold = SIMILARITY_THRESHOLD )
+    EasyBitMap IsolateColour( RGBQUAD KeepColour, int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
-        ControlBitMap NewMap{ *this };
+        EasyBitMap NewMap{ *this };
         for( auto&& CurrentPixel : NewMap.Pixels )
-            if( ! Similar( CurrentPixel, KeepColour, SimilarityThreshold ) ) CurrentPixel = KeepColour | ColourMask;
+            if( ! Similar( CurrentPixel, KeepColour, SimilarityThreshold ) )
+            {
+                CurrentPixel = { .rgbReserved = IGNORE_PIXEL };
+            }
         // else CurrentPixel = KeepColour;
         return NewMap;
     }
@@ -272,7 +260,7 @@ struct ControlBitMap
 
     RGBQUAD& operator[]( const POINT& CheckPoint ) { return Pixels[CheckPoint.x + CheckPoint.y * Dimension.cx]; }
 
-    SIZE FindMonochromeBlockLocal( const ControlBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
+    SIZE FindMonochromeBlockLocal( const EasyBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
     {
         if( prelim.x >= sentinel.x || prelim.y >= sentinel.y ) return Dimension;
 
@@ -282,26 +270,25 @@ struct ControlBitMap
 
         auto BoundLeft = prelim.x;
         for( const auto limit = prelim.x - w + 1; BoundLeft-- > limit && GetColour( BoundLeft, prelim.y ) == Match; )
-            ;
+        {}
 
         auto BoundTop = prelim.y;
         for( const auto limit = prelim.y - h + 1; BoundTop-- > limit && GetColour( prelim.x, BoundTop ) == Match; )
-            ;
+        {}
 
         auto BoundRight = prelim.x;
         for( const auto limit = sentinel.x - 1; BoundRight++ < limit && GetColour( BoundRight, prelim.y ) == Match; )
-            ;
+        {}
 
         auto BoundBottom = prelim.y;
         for( const auto limit = sentinel.y - 1; BoundBottom++ < limit && GetColour( prelim.x, BoundBottom ) == Match; )
-            ;
+        {}
 
         POINT new_prelim = { BoundLeft + w, BoundTop + h };
         POINT new_sentinel = { BoundRight, BoundBottom };
 
         if( new_prelim != prelim )
-            return FindMonochromeBlockLocal( MonochromeMap, new_prelim,
-                                             new_sentinel );  // search in shrinked region
+            return FindMonochromeBlockLocal( MonochromeMap, new_prelim, new_sentinel );  // search in shrinked region
         else
         {
             for( auto y = prelim.y; y-- > BoundTop + 1; )
@@ -321,7 +308,7 @@ struct ControlBitMap
         }
     }
 
-    SIZE FindMonochromeBlock( const ControlBitMap& MonochromeMap )
+    SIZE FindMonochromeBlock( const EasyBitMap& MonochromeMap )
     // special use of ControlBitMap format, only use Dimension field & single element Pixels vector
     // eg. { {0,0},{102,140},{0x0F7F7F7} }
     {
@@ -350,14 +337,8 @@ struct ControlBitMap
     {
         if( CanvasHandle == NULL ) return;
         HDC hdc = GetDC( CanvasHandle );
-
         SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.cx, Dimension.cy,  //
-                           0, 0, 0, Dimension.cy, Pixels.data(), &BI, DIB_RGB_COLORS );
-
-        // for( int j = 0, pos = 0; j < Dimension.y(); ++j )
-        //     for( int i = 0; i < Dimension.x(); ++i )
-        //         SetPixel( hdc, OffsetX + i, OffsetY + j, Pixels[ pos++ ] );
-
+                           0, 0, 0, Dimension.cy, Pixels.data(), &BitMapInformation, DIB_RGB_COLORS );
         ReleaseDC( CanvasHandle, hdc );
     }
 
@@ -375,7 +356,7 @@ struct ControlBitMap
             {
                 if( x % Dimension.cx == 0 ) OSS << "\n    ";
 
-                if( Pixels[pos].rgbReserved == IGNORE_COLOUR )
+                if( Pixels[pos].rgbReserved == IGNORE_PIXEL )
                     OSS << IGNORE_TEXT;
                 else
                     OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex
@@ -443,7 +424,7 @@ struct VirtualDeviceContext
     operator HDC() { return hdcDestin; }
 };
 
-struct CreateControl
+struct EasyControl
 {
     HWND Handle;
     int  ClickDuration{ 30 };
@@ -451,13 +432,13 @@ struct CreateControl
     int  KeyDuration{ 20 };
     int  KeyDelay{ 80 };
 
-    CreateControl() : Handle( NULL ) {}
+    EasyControl() : Handle( NULL ) {}
 
-    CreateControl( HWND _hwnd ) : Handle( _hwnd ) {}
+    EasyControl( HWND _hwnd ) : Handle( _hwnd ) {}
 
-    CreateControl( const CreateControl& _Control ) = default;
+    EasyControl( const EasyControl& _Control ) = default;
 
-    CreateControl( std::string_view WindowName, std::string_view ControlName )
+    EasyControl( std::string_view WindowName, std::string_view ControlName )
     {
         auto WindowHandles = GetWindowHandleByName( WindowName );
 
@@ -623,25 +604,25 @@ struct CreateControl
         MouseLeftUp( POINT_2 );
     }
 
-    ControlBitMap CaptureRegion( POINT Origin, SIZE Dimension ) const
+    EasyBitMap CaptureRegion( POINT Origin, SIZE Dimension ) const
     {
         int x{ Origin.x }, y{ Origin.y }, w{ Dimension.cx }, h{ Dimension.cy };
 
-        ControlBitMap BitMap( Origin, Dimension );
+        EasyBitMap BitMap( Origin, Dimension );
 
         HDC  hdcSource = GetDC( Handle );
         auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
 
-        GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BitMap.BI, DIB_RGB_COLORS );
+        GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BitMap.BitMapInformation, DIB_RGB_COLORS );
 
         ReleaseDC( Handle, hdcSource );
 
         return BitMap;
     }
 
-    inline bool MatchBitMap( const ControlBitMap& ReferenceBitMap, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+    inline bool MatchBitMap( const EasyBitMap& ReferenceBitMap, int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
         //  need complete re-work
         // capture whole image than compare
@@ -659,7 +640,7 @@ struct CreateControl
         for( int pos{ 0 }, j{ 0 }; j < h; ++j )
             for( int i{ 0 }; i < w; ++i, ++pos )
             {
-                if( ReferenceBitMap.Pixels[pos].rgbReserved == IGNORE_COLOUR ) continue;
+                if( ReferenceBitMap.Pixels[pos].rgbReserved == IGNORE_PIXEL ) continue;
 
                 // if ( ReferenceBitMap.Pixels[pos] &  REJECT_COLOUR )
                 // {
@@ -680,7 +661,7 @@ struct CreateControl
 
     inline RGBQUAD GetColour( int x, int y ) { return GetColour( { x, y } ); }
 
-    void Run( void ( *Proc )( CreateControl& ) ) { Proc( *this ); }
+    void Run( void ( *Proc )( EasyControl& ) ) { Proc( *this ); }
     //#define Run(Proc) Run( (void (*)(CreateControl&)) Proc )
 };
 
