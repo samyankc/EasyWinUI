@@ -1,12 +1,3 @@
-
-
-
-#include <algorithm>
-#include <iterator>
-#include <ratio>
-#include <bit>
-#include <string_view>
-#define SHOWACTION
 /*
 
 Usage:
@@ -17,6 +8,7 @@ Control.Drag({x1,y2},{x2,y2});
 COLORREF colour = Control.GetColour(x,y);
 
 */
+#define SHOWACTION
 
 #ifndef EASYWINCONTROL_H
 #define EASYWINCONTROL_H
@@ -25,6 +17,12 @@ COLORREF colour = Control.GetColour(x,y);
 #include <cstdint>
 #include <Windows.h>
 #include <gdiplus.h>
+
+#include <algorithm>
+#include <iterator>
+#include <ratio>
+#include <bit>
+#include <string_view>
 
 #include <cstring>
 #include <iomanip>
@@ -64,7 +62,7 @@ auto Method = [&Object = Object]    \
 <typename... Ts>(Ts&&... Args)      \
 { return Object.Method( std::forward<Ts>(Args)...); }
 */
-constexpr auto nMaxCount = 400;
+constexpr auto nMaxCount = 256;
 
 inline auto ShowHandleName( HWND Handle )
 {

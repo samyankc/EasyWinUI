@@ -290,8 +290,25 @@ namespace EWUI
             auto ResultString = std::string{};
             if( Handle )
             {
-                ResultString.resize( GetWindowTextLength( Handle ), '\0' );
-                GetWindowText( Handle, ResultString.data(), ResultString.length() + 1 );
+                ResultString.resize_and_overwrite( GetWindowTextLength( Handle ), [=]( auto Buffer, auto BufferSize ) {
+                    return GetWindowText( Handle, Buffer, BufferSize + 1 );
+                } );
+            }
+            // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,  //
+            //                                    [=]( auto... args ) { return GetWindowText( Handle, args... ); } );
+            // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,
+            //                                    std::bind_front( GetWindowText, Handle ) );
+            return ResultString;
+        }
+
+        auto Content_() const noexcept
+        {
+            auto ResultString = std::string{};
+            if( Handle )
+            {
+                auto BufferSize = GetWindowTextLength( Handle );
+                ResultString.resize( BufferSize, '\0' );
+                GetWindowText( Handle, ResultString.data(), BufferSize + 1 );
             }
             return ResultString;
         }
@@ -369,10 +386,10 @@ namespace EWUI
         constexpr ListBoxControl() noexcept
         {
             ClassName = WC_LISTBOX;
-            AddStyle( LBS_USETABSTOPS | LBS_WANTKEYBOARDINPUT | LBS_HASSTRINGS );
+            AddStyle( WS_VSCROLL | LBS_USETABSTOPS | LBS_WANTKEYBOARDINPUT | LBS_HASSTRINGS );
         }
 
-        void operator<<( const DataContainer& Source )
+        void operator<<( const DataContainer& Source ) const noexcept
         {
             if( ! Handle ) return;
             for( auto&& [ItemData, DisplayString] : Source )
@@ -383,11 +400,13 @@ namespace EWUI
             }
         };
 
-        auto Selection()
+        auto Selection() const noexcept
         {
             auto SelectedIndex = SendMessage( Handle, LB_GETCURSEL, AlwaysZero, AlwaysZero );
             return SendMessage( Handle, LB_GETITEMDATA, SelectedIndex, AlwaysZero );
         }
+
+        auto Reset() const noexcept { SendMessage( Handle, LB_RESETCONTENT, AlwaysZero, AlwaysZero ); }
     };
 
 
