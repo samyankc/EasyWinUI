@@ -89,7 +89,7 @@ inline void ShowAllChild( HWND Handle )
                       {} );
 }
 
-inline HWND ObtainFocusHandle( int Delay = 2000 )
+inline HWND ObtainFocusHandle( DWORD Delay = 2000 )
 {
     Sleep( Delay );
     HWND ret = GetFocus();
@@ -97,10 +97,10 @@ inline HWND ObtainFocusHandle( int Delay = 2000 )
     return ret;
 }
 
-constexpr WPARAM operator"" _VK( char ch )
+constexpr auto operator"" _VK( char ch )
 {
     if( ch >= 'a' && ch <= 'z' ) ch -= 'a' - 'A';
-    return ch;
+    return static_cast<WPARAM>(ch);
 }
 
 inline auto GetWindowHandleAll()
@@ -348,9 +348,9 @@ struct EasyBitMap
         OSS << "{";
         OSS << "\n    {" << Origin.x << "," << Origin.y << "}, {" << Dimension.cx << "," << Dimension.cy << "},";
         OSS << "\n    {";
-        for( int pos = 0, y = 0; y < Dimension.cy; ++y )
+        for( auto pos = 0uz, y = 0uz; y < Dimension.cy; ++y )
         {
-            for( int x = 0; x < Dimension.cx; ++x, ++pos )
+            for( auto x = 0uz; x < Dimension.cx; ++x, ++pos )
             {
                 if( x % Dimension.cx == 0 ) OSS << "\n    ";
 
@@ -425,10 +425,10 @@ struct VirtualDeviceContext
 struct EasyControl
 {
     HWND Handle;
-    int  ClickDuration{ 30 };
-    int  ClickDelay{ 120 };
-    int  KeyDuration{ 20 };
-    int  KeyDelay{ 80 };
+    DWORD ClickDuration{ 30 };
+    DWORD ClickDelay{ 120 };
+    DWORD KeyDuration{ 20 };
+    DWORD KeyDelay{ 80 };
 
     EasyControl() : Handle( NULL ) {}
 

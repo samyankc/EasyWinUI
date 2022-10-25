@@ -294,22 +294,10 @@ namespace EWUI
                     return GetWindowText( Handle, Buffer, BufferSize + 1 );
                 } );
             }
-            // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,  //
+            // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,
             //                                    [=]( auto... args ) { return GetWindowText( Handle, args... ); } );
             // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,
             //                                    std::bind_front( GetWindowText, Handle ) );
-            return ResultString;
-        }
-
-        auto Content_() const noexcept
-        {
-            auto ResultString = std::string{};
-            if( Handle )
-            {
-                auto BufferSize = GetWindowTextLength( Handle );
-                ResultString.resize( BufferSize, '\0' );
-                GetWindowText( Handle, ResultString.data(), BufferSize + 1 );
-            }
             return ResultString;
         }
 
