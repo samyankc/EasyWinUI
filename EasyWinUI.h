@@ -19,6 +19,7 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <wingdi.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -120,8 +121,8 @@ namespace EWUI
     using ControlAction = std::function<void()>;
     inline std::map<HWND, ControlAction> ActionContainer;
 
-    using ByteVector = std::vector<BYTE>;
-    using CanvasContent = std::pair<BITMAPINFO, ByteVector>;
+    //using ByteVector = std::vector<BYTE>;
+    using CanvasContent = std::pair<BITMAPINFO, std::vector<RGBQUAD>>;
     inline std::map<HWND, CanvasContent> CanvasContainer;
 
     inline LRESULT CALLBACK WndProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
@@ -320,12 +321,11 @@ namespace EWUI
 
         void Paint() const noexcept {}
 
-        template<MatchType<CanvasContent> T>
-        void Paint( T&& Content ) const noexcept
+        void Paint( const CanvasContent& Content ) const noexcept
         {
             if( Handle )
             {
-                CanvasContainer[Handle] = std::forward<T>( Content );
+                CanvasContainer[Handle] = std::move( Content );
                 InvalidateRect( Handle, NULL, 0 );  // trigger paint event
             }
         }
@@ -442,7 +442,7 @@ namespace EWUI
 
     struct WindowControl : BasicWindowHandle
     {
-        constexpr static auto ChildSeparation = 20;
+        constexpr static auto ChildSeparation = 10;
 
         SIZE  RequiredDimension{};
         POINT AnchorOffset{ ChildSeparation, ChildSeparation };
@@ -506,8 +506,8 @@ namespace EWUI
         {
             if( ! Handle ) return 0;
 
-            ReSize( { RequiredDimension.cx + WindowControl::ChildSeparation,
-                      RequiredDimension.cy + 2 * WindowControl::ChildSeparation } );
+            ReSize( { RequiredDimension.cx + 2 * WindowControl::ChildSeparation,
+                      RequiredDimension.cy + 3 * WindowControl::ChildSeparation } );
 
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );
@@ -602,7 +602,7 @@ namespace EWUI
         if( ! LHS.Handle ) return std::forward<T>( LHS );
         constexpr auto Read = []<typename U>( const std::optional<U>& Field ) { return Field.value_or( U{} ); };
 
-        auto ChildDimension = RHS.Dimension.value_or( SIZE{ 200, 20 } );
+        auto ChildDimension = RHS.Dimension.value_or( SIZE{ 100, 20 } );
         auto ChildOrigin = RHS.Origin.value_or( LHS.AnchorOffset );
 
         LHS.RequiredDimension = { std::max( LHS.AnchorOffset.x += ChildDimension.cx + WindowControl::ChildSeparation,
@@ -633,7 +633,7 @@ namespace EWUI
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, LPCSTR RHS )
     {
-        return std::forward<T>( LHS ) | TextLabel << Dimension( { 40, 20 } ) << Label( RHS );
+        return std::forward<T>( LHS ) | TextLabel << Dimension( { 40, 10 } ) << Label( RHS );
     }
 
     template<DerivedFrom<WindowControl> T>

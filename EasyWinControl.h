@@ -100,7 +100,7 @@ inline HWND ObtainFocusHandle( DWORD Delay = 2000 )
 constexpr auto operator"" _VK( char ch )
 {
     if( ch >= 'a' && ch <= 'z' ) ch -= 'a' - 'A';
-    return static_cast<WPARAM>(ch);
+    return static_cast<WPARAM>( ch );
 }
 
 inline auto GetWindowHandleAll()
@@ -169,6 +169,21 @@ inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, int SimilarityThreshold = SIMILAR
            Delta( LHS.rgbRed, RHS.rgbRed ) <= SimilarityThreshold;
 }
 
+// struct Point
+// {
+//     LPARAM POINT_DATA;
+//     constexpr Point( LPARAM _src ) : POINT_DATA( _src ) {}
+//     constexpr Point( int x, int y ) : POINT_DATA( MAKELPARAM( x, y ) ) {}
+//     constexpr         operator LPARAM&() { return POINT_DATA; }
+//     constexpr Point   operator-() const { return { -x(), -y() }; }
+//     constexpr Point   operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
+//     constexpr Point&  operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
+//     constexpr int16_t x() const { return LOWORD( POINT_DATA ); }
+//     constexpr int16_t y() const { return HIWORD( POINT_DATA ); }
+//     constexpr friend bool operator==( const Point& lhs, const Point& rhs ) { return lhs.POINT_DATA == rhs.POINT_DATA; }
+// };
+// using Offset = Point;
+
 constexpr auto operator+( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x + RHS.x, LHS.y + RHS.y }; }
 constexpr auto operator-( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x - RHS.x, LHS.y - RHS.y }; }
 constexpr auto operator==( const POINT& LHS, const POINT& RHS ) { return LHS.x == RHS.x && LHS.y == RHS.y; }
@@ -206,21 +221,6 @@ constexpr auto operator==( RGBQUAD LHS, RGBQUAD RHS ) noexcept
 {
     return RGBQUAD_To_Int( LHS ) == RGBQUAD_To_Int( RHS );
 }
-
-// struct Point
-// {
-//     LPARAM POINT_DATA;
-//     constexpr Point( LPARAM _src ) : POINT_DATA( _src ) {}
-//     constexpr Point( int x, int y ) : POINT_DATA( MAKELPARAM( x, y ) ) {}
-//     constexpr         operator LPARAM&() { return POINT_DATA; }
-//     constexpr Point   operator-() const { return { -x(), -y() }; }
-//     constexpr Point   operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
-//     constexpr Point&  operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
-//     constexpr int16_t x() const { return LOWORD( POINT_DATA ); }
-//     constexpr int16_t y() const { return HIWORD( POINT_DATA ); }
-//     constexpr friend bool operator==( const Point& lhs, const Point& rhs ) { return lhs.POINT_DATA == rhs.POINT_DATA; }
-// };
-// using Offset = Point;
 
 struct EasyBitMap
 {
@@ -424,7 +424,7 @@ struct VirtualDeviceContext
 
 struct EasyControl
 {
-    HWND Handle;
+    HWND  Handle;
     DWORD ClickDuration{ 30 };
     DWORD ClickDelay{ 120 };
     DWORD KeyDuration{ 20 };
