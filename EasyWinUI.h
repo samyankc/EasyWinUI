@@ -1,12 +1,12 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
-#include <Windows.h>
 #include <CommCtrl.h>
-#include <cstddef>
+#include <Windows.h>
 
 #include <algorithm>
 #include <concepts>
+#include <cstddef>
 #include <cstring>
 #include <functional>
 #include <iomanip>
@@ -289,15 +289,10 @@ namespace EWUI
         {
             auto ResultString = std::string{};
             if( Handle )
-            {
-                ResultString.resize_and_overwrite( GetWindowTextLength( Handle ), [=]( auto Buffer, auto BufferSize ) {
-                    return GetWindowText( Handle, Buffer, BufferSize + 1 );
-                } );
-            }
-            // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,
-            //                                    [=]( auto... args ) { return GetWindowText( Handle, args... ); } );
-            // ResultString.resize_and_overwrite( GetWindowTextLength( Handle ) + 1,
-            //                                    std::bind_front( GetWindowText, Handle ) );
+                ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
+                                                   [H = Handle]( auto Buffer, auto BufferSize ) {
+                                                       return GetWindowText( H, Buffer, BufferSize + 1 );
+                                                   } );
             return ResultString;
         }
 
