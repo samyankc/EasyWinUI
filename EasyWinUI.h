@@ -1,8 +1,8 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
-#include <CommCtrl.h>
 #include <Windows.h>
+#include <CommCtrl.h>
 
 #include <algorithm>
 #include <concepts>
@@ -290,8 +290,8 @@ namespace EWUI
             auto ResultString = std::string{};
             if( Handle )
                 ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
-                                                   [H = Handle]( auto Buffer, auto BufferSize ) {
-                                                       return GetWindowText( H, Buffer, BufferSize + 1 );
+                                                   [Handle = Handle]( auto Buffer, auto BufferSize ) {
+                                                       return GetWindowText( Handle, Buffer, BufferSize + 1 );
                                                    } );
             return ResultString;
         }
