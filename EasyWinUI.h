@@ -363,8 +363,8 @@ namespace EWUI
 
     struct ListBoxControl : Control
     {
-        using DataContainer = std::vector<
-            std::pair<std::invoke_result_t<decltype( SendMessage ), HWND, UINT, WPARAM, LPARAM>, std::string>>;
+        using KeyType = decltype( SendMessage( {}, {}, {}, {} ) );
+        using DataContainer = std::vector<std::pair<KeyType, std::string>>;
 
         constexpr ListBoxControl() noexcept
         {
