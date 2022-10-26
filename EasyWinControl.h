@@ -1,12 +1,3 @@
-
-
-
-#include <algorithm>
-#include <iterator>
-#include <ratio>
-#include <bit>
-#include <string_view>
-#define SHOWACTION
 /*
 
 Usage:
@@ -17,6 +8,7 @@ Control.Drag({x1,y2},{x2,y2});
 COLORREF colour = Control.GetColour(x,y);
 
 */
+#define SHOWACTION
 
 #ifndef EASYWINCONTROL_H
 #define EASYWINCONTROL_H
@@ -25,6 +17,12 @@ COLORREF colour = Control.GetColour(x,y);
 #include <cstdint>
 #include <Windows.h>
 #include <gdiplus.h>
+
+#include <algorithm>
+#include <iterator>
+#include <ratio>
+#include <bit>
+#include <string_view>
 
 #include <cstring>
 #include <iomanip>
@@ -64,7 +62,7 @@ auto Method = [&Object = Object]    \
 <typename... Ts>(Ts&&... Args)      \
 { return Object.Method( std::forward<Ts>(Args)...); }
 */
-constexpr auto nMaxCount = 400;
+constexpr auto nMaxCount = 256;
 
 inline auto ShowHandleName( HWND Handle )
 {
@@ -91,7 +89,7 @@ inline void ShowAllChild( HWND Handle )
                       {} );
 }
 
-inline HWND ObtainFocusHandle( int Delay = 2000 )
+inline HWND ObtainFocusHandle( DWORD Delay = 2000 )
 {
     Sleep( Delay );
     HWND ret = GetFocus();
@@ -99,10 +97,10 @@ inline HWND ObtainFocusHandle( int Delay = 2000 )
     return ret;
 }
 
-constexpr WPARAM operator"" _VK( char ch )
+constexpr auto operator"" _VK( char ch )
 {
     if( ch >= 'a' && ch <= 'z' ) ch -= 'a' - 'A';
-    return ch;
+    return static_cast<WPARAM>(ch);
 }
 
 inline auto GetWindowHandleAll()
@@ -350,9 +348,9 @@ struct EasyBitMap
         OSS << "{";
         OSS << "\n    {" << Origin.x << "," << Origin.y << "}, {" << Dimension.cx << "," << Dimension.cy << "},";
         OSS << "\n    {";
-        for( int pos = 0, y = 0; y < Dimension.cy; ++y )
+        for( auto pos = 0uz, y = 0uz; y < Dimension.cy; ++y )
         {
-            for( int x = 0; x < Dimension.cx; ++x, ++pos )
+            for( auto x = 0uz; x < Dimension.cx; ++x, ++pos )
             {
                 if( x % Dimension.cx == 0 ) OSS << "\n    ";
 
@@ -427,10 +425,10 @@ struct VirtualDeviceContext
 struct EasyControl
 {
     HWND Handle;
-    int  ClickDuration{ 30 };
-    int  ClickDelay{ 120 };
-    int  KeyDuration{ 20 };
-    int  KeyDelay{ 80 };
+    DWORD ClickDuration{ 30 };
+    DWORD ClickDelay{ 120 };
+    DWORD KeyDuration{ 20 };
+    DWORD KeyDelay{ 80 };
 
     EasyControl() : Handle( NULL ) {}
 
