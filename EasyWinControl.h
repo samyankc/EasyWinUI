@@ -344,15 +344,16 @@ struct EasyBitMap
 
     std::string Code()
     {
+        std::size_t        x = Origin.x, y = Origin.y, w = Dimension.cx, h = Dimension.cy;
         std::ostringstream OSS;
         OSS << "{";
-        OSS << "\n    {" << Origin.x << "," << Origin.y << "}, {" << Dimension.cx << "," << Dimension.cy << "},";
+        OSS << "\n    {" << x << "," << y << "}, {" << w << "," << h << "},";
         OSS << "\n    {";
-        for( auto pos = 0uz, y = 0uz; y < Dimension.cy; ++y )
+        for( auto pos = 0uz, y_ = 0uz; y_ < h; ++y_ )
         {
-            for( auto x = 0uz; x < Dimension.cx; ++x, ++pos )
+            for( auto x_ = 0uz; x_ < w; ++x_, ++pos )
             {
-                if( x % Dimension.cx == 0 ) OSS << "\n    ";
+                if( x_ % w == 0 ) OSS << "\n    ";
 
                 if( Pixels[pos].rgbReserved == IGNORE_PIXEL )
                     OSS << IGNORE_TEXT;
@@ -360,7 +361,7 @@ struct EasyBitMap
                     OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex
                         << RGBQUAD_To_Int( Pixels[pos] );
 
-                if( pos < Dimension.cx * Dimension.cy - 1 ) OSS << " , ";
+                if( pos < w * h - 1 ) OSS << " , ";
             }
         }
         OSS << "\n    }";

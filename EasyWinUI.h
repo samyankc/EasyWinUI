@@ -132,19 +132,18 @@ namespace EWUI
             // case WM_CREATE : break;
             // case WM_MOVE :
             // case WM_SIZE : InvalidateRect( hwnd, NULL, true ); break;
+            // case WM_ERASEBKGND : return true;
             case WM_PAINT :
             {
                 if( ! CanvasContainer.contains( hwnd ) ) return DefWindowProc( hwnd, msg, wParam, lParam );
 
                 auto CanvasHandle = hwnd;
                 auto& [BI, Pixels] = CanvasContainer[CanvasHandle];
-                auto hdc = GetDC( CanvasHandle );
-
-                SetDIBitsToDevice( hdc, 0, 0, BI.bmiHeader.biWidth, BI.bmiHeader.biHeight,  //
-                                   0, 0, 0, BI.bmiHeader.biHeight, Pixels.data(), &BI, DIB_RGB_COLORS );
-
-                ReleaseDC( CanvasHandle, hdc );
                 ValidateRect( CanvasHandle, NULL );
+                auto hdc = GetDC( CanvasHandle );
+                SetDIBitsToDevice( hdc, 0, 0, std::abs( BI.bmiHeader.biWidth ), std::abs( BI.bmiHeader.biHeight ),  //
+                                   0, 0, 0, std::abs( BI.bmiHeader.biHeight ), Pixels.data(), &BI, DIB_RGB_COLORS );
+                ReleaseDC( CanvasHandle, hdc );
             }
             break;
             case WM_COMMAND :
@@ -316,6 +315,7 @@ namespace EWUI
         constexpr CanvasControl() noexcept
         {
             ClassName = WC_STATIC;
+            Dimension = SIZE{ 0, 0 };
             RemoveStyle( WS_TABSTOP );
         }
 
@@ -323,10 +323,11 @@ namespace EWUI
 
         void Paint( const CanvasContent& Content ) const noexcept
         {
-            if( Handle )
+            auto CanvaseHandle = Parent.value_or( Handle );
+            if( CanvaseHandle )
             {
-                CanvasContainer[Handle] = std::move( Content );
-                InvalidateRect( Handle, NULL, 0 );  // trigger paint event
+                CanvasContainer[CanvaseHandle] = std::move( Content );
+                InvalidateRect( CanvaseHandle, NULL, 1 );  // trigger paint event
             }
         }
     };
@@ -386,6 +387,7 @@ namespace EWUI
         auto Selection() const noexcept
         {
             auto SelectedIndex = SendMessage( Handle, LB_GETCURSEL, AlwaysZero, AlwaysZero );
+            if( SelectedIndex == LB_ERR ) return LRESULT{ 0 };
             return SendMessage( Handle, LB_GETITEMDATA, SelectedIndex, AlwaysZero );
         }
 
@@ -617,7 +619,11 @@ namespace EWUI
                                        LHS.Handle, Read( RHS.MenuID ), EWUI::EntryPointParamPack.hInstance, NULL );
 
         using ChildType = std::remove_reference_t<decltype( RHS )>;
-        if constexpr( ! std::is_const_v<ChildType> ) RHS.Handle = Handle_;
+        if constexpr( ! std::is_const_v<ChildType> )
+        {
+            RHS.Handle = Handle_;
+            RHS.Parent = LHS.Handle;
+        }
         if constexpr( SpecializationOf<ChildType, ButtonControl> ) ActionContainer[Handle_] = RHS.Action;
 
         return std::forward<T>( LHS );
