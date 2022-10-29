@@ -81,7 +81,7 @@ inline auto ShowHandleName( HWND Handle )
 inline void ShowAllChild( HWND Handle )
 {
     EnumChildWindows( Handle,
-                      []( HWND ChildHandle, LPARAM ) -> int {
+                      []( HWND ChildHandle, LPARAM ) -> WINBOOL {
                           std::cout << "\\ ";
                           ShowHandleName( ChildHandle );
                           return true;
@@ -109,7 +109,7 @@ inline auto GetWindowHandleAll()
     Handles.reserve( 256 );
 
     EnumWindows(
-        []( HWND Handle, LPARAM lParam_ ) -> int {
+        []( HWND Handle, LPARAM lParam_ ) -> WINBOOL {
             reinterpret_cast<std::vector<HWND>*>( lParam_ )->push_back( Handle );
             return true;
         },

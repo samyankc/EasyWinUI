@@ -19,6 +19,7 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <windef.h>
 #include <wingdi.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
@@ -136,7 +137,6 @@ namespace EWUI
             case WM_PAINT :
             {
                 if( ! CanvasContainer.contains( hwnd ) ) return DefWindowProc( hwnd, msg, wParam, lParam );
-
                 auto CanvasHandle = hwnd;
                 auto& [BI, Pixels] = CanvasContainer[CanvasHandle];
                 ValidateRect( CanvasHandle, NULL );
@@ -176,22 +176,23 @@ namespace EWUI
     {
         HWND Handle{ NULL };
 
+        template<auto RectRetriever>
         auto GetRect() const noexcept
         {
             RECT rect;
-            GetWindowRect( Handle, &rect );
+            RectRetriever( Handle, &rect );
             return rect;
         }
 
         auto Width() const noexcept
         {
-            auto rect = GetRect();
+            auto rect = GetRect<GetWindowRect>();
             return rect.right - rect.left;
         }
 
         auto Height() const noexcept
         {
-            auto rect = GetRect();
+            auto rect = GetRect<GetWindowRect>();
             return rect.bottom - rect.top;
         }
 
@@ -200,7 +201,11 @@ namespace EWUI
 
         auto ReSize( SIZE NewDimension ) const noexcept
         {
-            SetWindowPos( Handle, HWND_NOTOPMOST, 0, 0, NewDimension.cx, NewDimension.cy,
+            auto ClientRect = RECT{ 0, 0, NewDimension.cx, NewDimension.cy };
+            AdjustWindowRect( &ClientRect, GetStyle(), false );
+            auto NewWidth{ ClientRect.right - ClientRect.left },  //
+                NewHeight{ ClientRect.bottom - ClientRect.top };
+            SetWindowPos( Handle, HWND_NOTOPMOST, 0, 0, NewWidth, NewHeight,
                           // SWP_SHOWWINDOW |
                           SWP_NOMOVE | SWP_NOZORDER );
         }
@@ -508,8 +513,8 @@ namespace EWUI
         {
             if( ! Handle ) return 0;
 
-            ReSize( { RequiredDimension.cx + 2 * WindowControl::ChildSeparation,
-                      RequiredDimension.cy + 3 * WindowControl::ChildSeparation } );
+            ReSize( { RequiredDimension.cx + WindowControl::ChildSeparation,
+                      RequiredDimension.cy + WindowControl::ChildSeparation } );
 
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );
