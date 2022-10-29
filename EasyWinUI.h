@@ -27,6 +27,9 @@
 // helpers
 namespace
 {
+
+    constexpr inline auto MaxClassNameLength = 256uz;
+
     template<typename Derived, typename Base>
     concept DerivedFrom = std::is_base_of_v<std::decay_t<Base>, std::decay_t<Derived>>;
 
@@ -81,25 +84,27 @@ namespace
     template<std::size_t N>
     struct FixedString
     {
-        char data[N];
-        constexpr FixedString( const char ( &Src )[N] ) : data{}
-        {
-            for( std::size_t i{ 0 }; i < N; ++i ) data[i] = Src[i];
-        }
+        char data[N]{};
 
-        constexpr operator const char*() const { return data; }
+        constexpr FixedString( const char ( &Src )[N] ) { std::ranges::copy( Src, data ); }
+        constexpr auto BufferSize() const noexcept { return N; }
+
+        // constexpr auto ToStringView() const noexcept { return std::string_view{ data }; }
+        // constexpr auto length() const noexcept { return ToStringView().length(); }
+
+        constexpr operator std::string_view() const noexcept { return { data }; }
     };
 
     template<std::size_t N>
     FixedString( const char ( & )[N] ) -> FixedString<N>;
 
     template<FixedString TargetClassName>
-    bool MatchClass( HWND hwnd )
+    bool MatchClass( HWND Handle )
     {
-        constexpr auto MaxBufferSize = 100;
-        char           Buffer[MaxBufferSize]{ 0 };
-        auto           ClassNameLength = GetClassName( hwnd, Buffer, MaxBufferSize );
-        return strcmp( TargetClassName, Buffer ) == 0;
+        constexpr auto BufferSize = TargetClassName.BufferSize();
+        char           Buffer[BufferSize];
+        GetClassName( Handle, Buffer, BufferSize );
+        return std::string_view{ Buffer } == TargetClassName;
     }
 }  // namespace
 
@@ -116,7 +121,7 @@ namespace EWUI
     {
     } LineBreak, NewLine;
 
-    constexpr auto AlwaysZero = 0L;
+    constexpr auto AlwaysZero = 0LL;
 
     constexpr auto EmptyAction = [] {};
     using ControlAction = std::function<void()>;
@@ -513,8 +518,8 @@ namespace EWUI
         {
             if( ! Handle ) return 0;
 
-            ReSize( { RequiredDimension.cx + WindowControl::ChildSeparation,
-                      RequiredDimension.cy + WindowControl::ChildSeparation } );
+            ReSize( { RequiredDimension.cx + 0 * WindowControl::ChildSeparation,
+                      RequiredDimension.cy + 0 * WindowControl::ChildSeparation } );
 
             ShowWindow( Handle, EWUI::EntryPointParamPack.nCmdShow );
             UpdateWindow( Handle );

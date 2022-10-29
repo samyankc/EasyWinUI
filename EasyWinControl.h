@@ -475,7 +475,9 @@ struct EasyControl
         }
     }
 
-    operator HWND() { return Handle; }
+    operator HWND() const { return Handle; }
+
+    auto empty() const noexcept { return Handle == NULL; }
 
     inline void SendKey( WPARAM VirtualKey, LPARAM HardwareScanCode = 1 )
     {
