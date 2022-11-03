@@ -19,8 +19,6 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
-#include <windef.h>
-#include <wingdi.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -142,6 +140,7 @@ namespace EWUI
             case WM_PAINT :
             {
                 if( ! CanvasContainer.contains( hwnd ) ) return DefWindowProc( hwnd, msg, wParam, lParam );
+
                 auto CanvasHandle = hwnd;
                 auto& [BI, Pixels] = CanvasContainer[CanvasHandle];
                 ValidateRect( CanvasHandle, NULL );
@@ -240,6 +239,17 @@ namespace EWUI
         {
             return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() & ~TargetExStyle );
         }
+
+        auto TextContent() const noexcept
+        {
+            auto ResultString = std::string{};
+            if( Handle )
+                ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
+                                                   [Handle = Handle]( auto Buffer, auto BufferSize ) {
+                                                       return GetWindowText( Handle, Buffer, BufferSize + 1 );
+                                                   } );
+            return ResultString;
+        }
     };
 
     struct ControlConfiguration : BasicWindowHandle
@@ -256,7 +266,7 @@ namespace EWUI
 
     constexpr auto MakeConfigurator = []<typename T>( std::optional<T> ControlConfiguration::*Field ) {
         return [Field]( T Arg ) {
-            ControlConfiguration Result{};
+            auto Result = ControlConfiguration{};
             Result.*Field = Arg;
             return Result;
         };
@@ -268,12 +278,6 @@ namespace EWUI
     constexpr auto ExStyle = MakeConfigurator( &ControlConfiguration::ExStyle );
     constexpr auto Origin = MakeConfigurator( &ControlConfiguration::Origin );
     constexpr auto Dimension = MakeConfigurator( &ControlConfiguration::Dimension );
-    // constexpr ControlConfiguration MenuID( HMENU MenuID_ ) { return { .MenuID = MenuID_ }; }
-    // constexpr ControlConfiguration Label( LPCSTR Label_ ) { return { .Label = Label_ }; }
-    // constexpr ControlConfiguration Style( DWORD Style_ ) { return { .Style = Style_ }; }
-    // constexpr ControlConfiguration ExStyle( DWORD ExStyle_ ) { return { .ExStyle = ExStyle_ }; }
-    // constexpr ControlConfiguration Origin( POINT Origin_ ) { return { .Origin = Origin_ }; }
-    // constexpr ControlConfiguration Dimension( SIZE Dimension_ ) { return { .Dimension = Dimension_ }; }
 
     struct Control : ControlConfiguration
     {
@@ -295,16 +299,7 @@ namespace EWUI
             SetWindowText( Handle, IncomingContent.data() );
         }
 
-        auto Content() const noexcept
-        {
-            auto ResultString = std::string{};
-            if( Handle )
-                ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
-                                                   [Handle = Handle]( auto Buffer, auto BufferSize ) {
-                                                       return GetWindowText( Handle, Buffer, BufferSize + 1 );
-                                                   } );
-            return ResultString;
-        }
+        auto Content() const noexcept { return TextContent(); }
 
         auto operator=( std::string_view IncomingContent ) const noexcept { return SetLabel( IncomingContent ); }
     };
@@ -331,13 +326,16 @@ namespace EWUI
 
         void Paint() const noexcept {}
 
-        void Paint( const CanvasContent& Content ) const noexcept
+        void Paint( CanvasContent Content ) const noexcept
         {
-            auto CanvaseHandle = Parent.value_or( Handle );
-            if( CanvaseHandle )
+            //auto CanvasHandle = Parent.value_or( Handle );
+            auto CanvasHandle = Handle;
+            if( CanvasHandle )
             {
-                CanvasContainer[CanvaseHandle] = std::move( Content );
-                InvalidateRect( CanvaseHandle, NULL, 1 );  // trigger paint event
+                CanvasContainer[CanvasHandle] = std::move( Content );
+                RedrawWindow( CanvasHandle, {}, {}, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN );
+                //InvalidateRect( CanvasHandle, NULL, 1 );  // trigger paint event
+                //InvalidateRgn( CanvaseHandle, NULL, 1 );  // trigger paint event
             }
         }
     };
@@ -525,6 +523,7 @@ namespace EWUI
             UpdateWindow( Handle );
 
             MSG Msg{};
+
             while( GetMessage( &Msg, NULL, 0, 0 ) > 0 )
             {
                 if( ( Msg.message == WM_KEYDOWN || Msg.message == WM_KEYUP )  //
@@ -537,7 +536,6 @@ namespace EWUI
 
                 if( ! IsDialogMessage( Handle, &Msg ) )
                 {
-                    //PrintMSG( ">>", Msg );
                     TranslateMessage( &Msg );
                     DispatchMessage( &Msg );
                 }
@@ -555,6 +553,13 @@ namespace EWUI
         PopupWindowControl( const PopupWindowControl& Source )
         {
             Handle = Source.Handle ? Source.Handle : NewWindow( "EWUI Popup Window Class", "EWUI Popup Window" );
+        }
+
+        auto Paint( CanvasContent Content ) const noexcept
+        {
+            if( ! Handle ) return;
+            CanvasContainer[Handle] = std::move( Content );
+            RedrawWindow( Handle, {}, {}, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN );
         }
     };
 

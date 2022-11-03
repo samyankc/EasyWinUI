@@ -8,6 +8,7 @@ Control.Drag({x1,y2},{x2,y2});
 COLORREF colour = Control.GetColour(x,y);
 
 */
+#include <type_traits>
 #define SHOWACTION
 
 #ifndef EASYWINCONTROL_H
@@ -62,7 +63,7 @@ auto Method = [&Object = Object]    \
 <typename... Ts>(Ts&&... Args)      \
 { return Object.Method( std::forward<Ts>(Args)...); }
 */
-constexpr auto nMaxCount = 256;
+constexpr auto nMaxCount = 256uz;
 
 inline auto ShowHandleName( HWND Handle )
 {
@@ -92,9 +93,8 @@ inline void ShowAllChild( HWND Handle )
 inline HWND ObtainFocusHandle( DWORD Delay = 2000 )
 {
     Sleep( Delay );
-    HWND ret = GetFocus();
-    if( ret == NULL ) ret = GetForegroundWindow();
-    return ret;
+    if( HWND ret = GetFocus(); ret ) return ret;
+    return GetForegroundWindow();
 }
 
 constexpr auto operator"" _VK( char ch )
@@ -257,79 +257,80 @@ struct EasyBitMap
     RGBQUAD GetColour( int x, int y ) { return Pixels[x + y * Dimension.cx]; }
 
     RGBQUAD& operator[]( const POINT& CheckPoint ) { return Pixels[CheckPoint.x + CheckPoint.y * Dimension.cx]; }
+    //RGBQUAD& operator[]( const LONG x, const LONG y ) { return Pixels[x + y * Dimension.cx]; }
 
-    SIZE FindMonochromeBlockLocal( const EasyBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
-    {
-        if( prelim.x >= sentinel.x || prelim.y >= sentinel.y ) return Dimension;
+    // SIZE FindMonochromeBlockLocal( const EasyBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
+    // {
+    //     if( prelim.x >= sentinel.x || prelim.y >= sentinel.y ) return Dimension;
 
-        auto Match = MonochromeMap.Pixels[0];
-        auto w = MonochromeMap.Dimension.cx;
-        auto h = MonochromeMap.Dimension.cy;
+    //     auto Match = MonochromeMap.Pixels[0];
+    //     auto w = MonochromeMap.Dimension.cx;
+    //     auto h = MonochromeMap.Dimension.cy;
 
-        auto BoundLeft = prelim.x;
-        for( const auto limit = prelim.x - w + 1; BoundLeft-- > limit && GetColour( BoundLeft, prelim.y ) == Match; )
-        {}
+    //     auto BoundLeft = prelim.x;
+    //     for( const auto limit = prelim.x - w + 1; BoundLeft-- > limit && GetColour( BoundLeft, prelim.y ) == Match; )
+    //     {}
 
-        auto BoundTop = prelim.y;
-        for( const auto limit = prelim.y - h + 1; BoundTop-- > limit && GetColour( prelim.x, BoundTop ) == Match; )
-        {}
+    //     auto BoundTop = prelim.y;
+    //     for( const auto limit = prelim.y - h + 1; BoundTop-- > limit && GetColour( prelim.x, BoundTop ) == Match; )
+    //     {}
 
-        auto BoundRight = prelim.x;
-        for( const auto limit = sentinel.x - 1; BoundRight++ < limit && GetColour( BoundRight, prelim.y ) == Match; )
-        {}
+    //     auto BoundRight = prelim.x;
+    //     for( const auto limit = sentinel.x - 1; BoundRight++ < limit && GetColour( BoundRight, prelim.y ) == Match; )
+    //     {}
 
-        auto BoundBottom = prelim.y;
-        for( const auto limit = sentinel.y - 1; BoundBottom++ < limit && GetColour( prelim.x, BoundBottom ) == Match; )
-        {}
+    //     auto BoundBottom = prelim.y;
+    //     for( const auto limit = sentinel.y - 1; BoundBottom++ < limit && GetColour( prelim.x, BoundBottom ) == Match; )
+    //     {}
 
-        POINT new_prelim = { BoundLeft + w, BoundTop + h };
-        POINT new_sentinel = { BoundRight, BoundBottom };
+    //     POINT new_prelim = { BoundLeft + w, BoundTop + h };
+    //     POINT new_sentinel = { BoundRight, BoundBottom };
 
-        if( new_prelim != prelim )
-            return FindMonochromeBlockLocal( MonochromeMap, new_prelim, new_sentinel );  // search in shrinked region
-        else
-        {
-            for( auto y = prelim.y; y-- > BoundTop + 1; )
-                for( auto x = prelim.x; x-- > BoundLeft + 1; )
-                    if( GetColour( x, y ) != Match )
-                    {
-                        // region #1: { prelim.x(), y+h }, new_sentinel ; everything below y
-                        auto LocalSearch = FindMonochromeBlockLocal( MonochromeMap, { prelim.x, y + h }, new_sentinel );
-                        if( LocalSearch != Dimension ) return LocalSearch;
+    //     if( new_prelim != prelim )
+    //         return FindMonochromeBlockLocal( MonochromeMap, new_prelim, new_sentinel );  // search in shrinked region
+    //     else
+    //     {
+    //         for( auto y = prelim.y; y-- > BoundTop + 1; )
+    //             for( auto x = prelim.x; x-- > BoundLeft + 1; )
+    //                 if( GetColour( x, y ) != Match )
+    //                 {
+    //                     // region #1: { prelim.x(), y+h }, new_sentinel ; everything below y
+    //                     auto LocalSearch = FindMonochromeBlockLocal( MonochromeMap, { prelim.x, y + h }, new_sentinel );
+    //                     if( LocalSearch != Dimension ) return LocalSearch;
 
-                        // region #2: { x+w, prelim.y() }, { new_sentinel.x(), y+h-1 } ; to the right, exclude region #1
-                        // overlap
-                        return FindMonochromeBlockLocal( MonochromeMap, { x + w, prelim.y },
-                                                         { new_sentinel.x, y + h } );
-                    }
-            return { BoundLeft + 1, BoundTop + 1 };  // found
-        }
-    }
+    //                     // region #2: { x+w, prelim.y() }, { new_sentinel.x(), y+h-1 } ; to the right, exclude region #1
+    //                     // overlap
+    //                     return FindMonochromeBlockLocal( MonochromeMap, { x + w, prelim.y },
+    //                                                      { new_sentinel.x, y + h } );
+    //                 }
+    //         return { BoundLeft + 1, BoundTop + 1 };  // found
+    //     }
+    // }
 
-    SIZE FindMonochromeBlock( const EasyBitMap& MonochromeMap )
-    // special use of ControlBitMap format, only use Dimension field & single element Pixels vector
-    // eg. { {0,0},{102,140},{0x0F7F7F7} }
-    {
-        auto Match = MonochromeMap.Pixels[0];
-        auto w = MonochromeMap.Dimension.cx;
-        auto h = MonochromeMap.Dimension.cy;
+    // SIZE FindMonochromeBlock( const EasyBitMap& MonochromeMap )
+    // // special use of ControlBitMap format, only use Dimension field & single element Pixels vector
+    // // eg. { {0,0},{102,140},{0x0F7F7F7} }
+    // {
+    //     auto Match = MonochromeMap.Pixels[0];
+    //     auto w = MonochromeMap.Dimension.cx;
+    //     auto h = MonochromeMap.Dimension.cy;
 
-        // disect entire region into sub regions
-        // each preliminary check point separate w-1/h-1 apart => x_n + w = x_n+1
-        for( auto prelim_y = h - 1; prelim_y < Dimension.cy; prelim_y += h )
-            for( auto prelim_x = w - 1; prelim_x < Dimension.cx; prelim_x += w )
-            {
-                if( GetColour( prelim_x, prelim_y ) != Match ) continue;
-                // main search starts here
-                auto LocalSearch =
-                    FindMonochromeBlockLocal( MonochromeMap, { prelim_x, prelim_y },
-                                              { prelim_x + w < Dimension.cx ? prelim_x + w : Dimension.cx,
-                                                prelim_y + h < Dimension.cy ? prelim_y + h : Dimension.cy } );
-                if( LocalSearch != Dimension ) return LocalSearch;
-            }
+    //     // disect entire region into sub regions
+    //     // each preliminary check point separate w-1/h-1 apart => x_n + w = x_n+1
+    //     for( auto prelim_y = h - 1; prelim_y < Dimension.cy; prelim_y += h )
+    //         for( auto prelim_x = w - 1; prelim_x < Dimension.cx; prelim_x += w )
+    //         {
+    //             if( GetColour( prelim_x, prelim_y ) != Match ) continue;
+    //             // main search starts here
+    //             auto LocalSearch =
+    //                 FindMonochromeBlockLocal( MonochromeMap, { prelim_x, prelim_y },
+    //                                           { prelim_x + w < Dimension.cx ? prelim_x + w : Dimension.cx,
+    //                                             prelim_y + h < Dimension.cy ? prelim_y + h : Dimension.cy } );
+    //             if( LocalSearch != Dimension ) return LocalSearch;
+    //         }
 
-        return Dimension;  // indicate not found
-    }
+    //     return Dimension;  // indicate not found
+    // }
 
     void DisplayAt( HWND CanvasHandle, int OffsetX = 0, int OffsetY = 0 )
     {
@@ -361,7 +362,7 @@ struct EasyBitMap
                     OSS << "0x" << std::uppercase << std::setfill( '0' ) << std::setw( 7 ) << std::hex
                         << RGBQUAD_To_Int( Pixels[pos] );
 
-                if( pos < w * h - 1 ) OSS << " , ";
+                if( pos < w * h - 1 ) OSS << ",";
             }
         }
         OSS << "\n    }";
@@ -372,55 +373,77 @@ struct EasyBitMap
 };
 
 //#define AcquireFocus(_Handle_) AcquireFocus_ TemporaryFocus(_Handle_); auto dummy:{0}
-#define AcquireFocus( _Handle_ )                         \
-    struct                                               \
-    {                                                    \
-        const AcquireFocus_& _Dummy_;                    \
-        bool                 _InLoop_;                   \
-    } TemporaryFocus{ AcquireFocus_{ _Handle_ }, true }; \
-    TemporaryFocus._InLoop_;                             \
-    TemporaryFocus._InLoop_ = false
+// #define AcquireFocus( _Handle_ )                         \
+//     struct                                               \
+//     {                                                    \
+//         const AcquireFocus_& _Dummy_;                    \
+//         bool                 _InLoop_;                   \
+//     } TemporaryFocus{ AcquireFocus_{ _Handle_ }, true }; \
+//     TemporaryFocus._InLoop_;                             \
+//     TemporaryFocus._InLoop_ = false
 
-struct AcquireFocus_
-{
-    HWND LastForegroundWindow;
+// struct AcquireFocus_
+// {
+//     HWND LastForegroundWindow;
 
-    inline void BringToForeground( HWND Handle )
-    {
-        SendMessage( Handle, WM_ACTIVATE, WA_CLICKACTIVE, 0 );
-        SetForegroundWindow( Handle );
-        // SwitchToThisWindow(Handle,true);
-        // Sleep(100);
-    }
+//     inline void BringToForeground( HWND Handle )
+//     {
+//         SendMessage( Handle, WM_ACTIVATE, WA_CLICKACTIVE, 0 );
+//         SetForegroundWindow( Handle );
+//         // SwitchToThisWindow(Handle,true);
+//         // Sleep(100);
+//     }
 
-    AcquireFocus_( HWND Handle )
-    {
-        LastForegroundWindow = GetForegroundWindow();
-        BringToForeground( Handle );
-    }
+//     AcquireFocus_( HWND Handle )
+//     {
+//         LastForegroundWindow = GetForegroundWindow();
+//         BringToForeground( Handle );
+//     }
 
-    ~AcquireFocus_() { BringToForeground( LastForegroundWindow ); }
-};
+//     ~AcquireFocus_() { BringToForeground( LastForegroundWindow ); }
+// };
 
-struct VirtualDeviceContext
+struct VirtualDeviceContext_
 {
     HDC     hdcDestin;
     HBITMAP hBMP;
 
-    VirtualDeviceContext( const HDC& hdcSource, int w, int h )
+    VirtualDeviceContext_( const HDC& hdcSource, int w, int h )
     {
         hdcDestin = CreateCompatibleDC( hdcSource );
         hBMP = CreateCompatibleBitmap( hdcSource, w, h );
         SelectObject( hdcDestin, hBMP );
     }
 
-    ~VirtualDeviceContext()
+    ~VirtualDeviceContext_()
     {
         DeleteObject( hBMP );
         DeleteDC( hdcDestin );
     }
 
     operator HDC() { return hdcDestin; }
+};
+
+struct VirtualDeviceContext
+{
+    HWND    Handle;
+    HDC     Destination,Source;
+    HBITMAP BitMap;
+
+    VirtualDeviceContext( const HDC& hdcSource, int w, int h )
+    {
+        Destination = CreateCompatibleDC( hdcSource );
+        BitMap = CreateCompatibleBitmap( hdcSource, w, h );
+        SelectObject( Destination, BitMap );
+    }
+
+    ~VirtualDeviceContext()
+    {
+        DeleteObject( BitMap );
+        DeleteDC( Destination );
+    }
+
+    operator HDC() { return Destination; }
 };
 
 struct EasyControl
@@ -612,7 +635,7 @@ struct EasyControl
         EasyBitMap BitMap( Origin, Dimension );
 
         HDC  hdcSource = GetDC( Handle );
-        auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
+        auto VirtualDC = VirtualDeviceContext_( hdcSource, w, h );
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
 
@@ -633,7 +656,7 @@ struct EasyControl
             w{ ReferenceBitMap.Dimension.cx }, h{ ReferenceBitMap.Dimension.cy };
 
         HDC  hdcSource = GetDC( Handle );
-        auto VirtualDC = VirtualDeviceContext( hdcSource, w, h );
+        auto VirtualDC = VirtualDeviceContext_( hdcSource, w, h );
 
         BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
         ReleaseDC( Handle, hdcSource );
