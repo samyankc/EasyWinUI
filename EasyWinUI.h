@@ -104,6 +104,17 @@ namespace
         GetClassName( Handle, Buffer, BufferSize );
         return std::string_view{ Buffer } == TargetClassName;
     }
+
+    inline auto NameOfHandle( HWND Handle )
+    {
+        std::string ResultString;
+        ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
+                                           [Handle = Handle]( auto Buffer, auto BufferSize ) {
+                                               return GetWindowText( Handle, Buffer, BufferSize + 1 );
+                                           } );
+        return ResultString;
+    }
+
 }  // namespace
 
 namespace EWUI
@@ -139,33 +150,44 @@ namespace EWUI
             // case WM_ERASEBKGND : return true;
             case WM_PAINT :
             {
-                if( ! CanvasContainer.contains( hwnd ) ) return DefWindowProc( hwnd, msg, wParam, lParam );
-
-                auto CanvasHandle = hwnd;
-                auto& [BI, Pixels] = CanvasContainer[CanvasHandle];
-                ValidateRect( CanvasHandle, NULL );
-                auto hdc = GetDC( CanvasHandle );
-                SetDIBitsToDevice( hdc, 0, 0, std::abs( BI.bmiHeader.biWidth ), std::abs( BI.bmiHeader.biHeight ),  //
-                                   0, 0, 0, std::abs( BI.bmiHeader.biHeight ), Pixels.data(), &BI, DIB_RGB_COLORS );
-                ReleaseDC( CanvasHandle, hdc );
-            }
-            break;
-            case WM_COMMAND :
-                if( ! ActionContainer.contains( std::bit_cast<HWND>( lParam ) ) )
-                    return DefWindowProc( hwnd, msg, wParam, lParam );
-                std::thread( ActionContainer[std::bit_cast<HWND>( lParam )] ).detach();
+                for( auto&& [CanvasHandle, CanvasContent] : CanvasContainer )
+                {
+                    if( GetParent( CanvasHandle ) == hwnd )
+                    {
+                        auto&& [BI, Pixels] = CanvasContent;
+                        //ValidateRect( CanvasHandle, NULL );
+                        auto hdc = GetDC( CanvasHandle );
+                        SetDIBitsToDevice( hdc, 0, 0, std::abs( BI.bmiHeader.biWidth ),
+                                           std::abs( BI.bmiHeader.biHeight ), 0, 0, 0,
+                                           std::abs( BI.bmiHeader.biHeight ), Pixels.data(), &BI, DIB_RGB_COLORS );
+                        ReleaseDC( CanvasHandle, hdc );
+                    }
+                }
                 break;
+            }
+            case WM_COMMAND :
+            {
+                if( ActionContainer.contains( std::bit_cast<HWND>( lParam ) ) )
+                    std::thread( ActionContainer[std::bit_cast<HWND>( lParam )] ).detach();
+                break;
+            }
             case WM_CLOSE :
+            {
                 if( GetWindow( hwnd, GW_OWNER ) == NULL )
                     DestroyWindow( hwnd );
                 else
                     ShowWindow( hwnd, SW_HIDE );
-                break;
-            case WM_DESTROY : PostQuitMessage( 0 ); break;
-            default : return DefWindowProc( hwnd, msg, wParam, lParam );
+                return 0;
+            }
+            case WM_DESTROY :
+            {
+                PostQuitMessage( 0 );
+                return 0;
+            }
+            default : break;
         }
 
-        return 0;
+        return DefWindowProc( hwnd, msg, wParam, lParam );
     }
 
     inline struct EntryPointParamPack_
@@ -300,6 +322,11 @@ namespace EWUI
         }
 
         auto Content() const noexcept { return TextContent(); }
+        auto NumbericContent() const noexcept
+        {
+            auto Text = TextContent();
+            return ( std::ranges::all_of( Text, []( auto c ) { return std::isdigit( c ); } ) ) ? std::stoi( Text ) : 0;
+        }
 
         auto operator=( std::string_view IncomingContent ) const noexcept { return SetLabel( IncomingContent ); }
     };
@@ -309,6 +336,7 @@ namespace EWUI
         constexpr TextLabelControl() noexcept
         {
             ClassName = WC_STATIC;
+            AddStyle( SS_WORDELLIPSIS );
             RemoveStyle( WS_TABSTOP );
         }
 
@@ -333,9 +361,10 @@ namespace EWUI
             if( CanvasHandle )
             {
                 CanvasContainer[CanvasHandle] = std::move( Content );
-                RedrawWindow( CanvasHandle, {}, {}, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN );
+                InvalidateRect( Parent.value_or( CanvasHandle ), NULL, 0 );  // trigger paint event
                 //InvalidateRect( CanvasHandle, NULL, 1 );  // trigger paint event
-                //InvalidateRgn( CanvaseHandle, NULL, 1 );  // trigger paint event
+                //RedrawWindow( CanvasHandle, {}, {}, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN );
+                //InvalidateRgn( CanvasHandle, NULL, 1 );  // trigger paint event
             }
         }
     };
@@ -559,7 +588,8 @@ namespace EWUI
         {
             if( ! Handle ) return;
             CanvasContainer[Handle] = std::move( Content );
-            RedrawWindow( Handle, {}, {}, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN );
+            RedrawWindow( Handle, {}, {},  // RDW_ERASE |
+                          RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN );
         }
     };
 
@@ -654,7 +684,7 @@ namespace EWUI
     template<DerivedFrom<WindowControl> T>
     decltype( auto ) operator|( T&& LHS, LPCSTR RHS )
     {
-        return std::forward<T>( LHS ) | TextLabel << Dimension( { 40, 10 } ) << Label( RHS );
+        return std::forward<T>( LHS ) | TextLabel << Dimension( { 40, 20 } ) << Label( RHS );
     }
 
     template<DerivedFrom<WindowControl> T>

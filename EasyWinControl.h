@@ -229,6 +229,7 @@ struct EasyBitMap
     BITMAPINFO           BitMapInformation{};
     std::vector<RGBQUAD> Pixels;
 
+    EasyBitMap() = default;
     EasyBitMap( POINT Origin_, SIZE Dimension_ ) : Origin( Origin_ ), Dimension( Dimension_ )
     {
         BitMapInformation.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
@@ -254,10 +255,10 @@ struct EasyBitMap
         return NewMap;
     }
 
-    RGBQUAD GetColour( int x, int y ) { return Pixels[x + y * Dimension.cx]; }
+    auto GetColour( int x, int y ) { return Pixels[x + y * Dimension.cx]; }
 
-    RGBQUAD& operator[]( const POINT& CheckPoint ) { return Pixels[CheckPoint.x + CheckPoint.y * Dimension.cx]; }
-    //RGBQUAD& operator[]( const LONG x, const LONG y ) { return Pixels[x + y * Dimension.cx]; }
+    auto& operator[]( const POINT& CheckPoint ) { return Pixels[CheckPoint.x + CheckPoint.y * Dimension.cx]; }
+    //auto& operator[]( const LONG x, const LONG y ) { return Pixels[x + y * Dimension.cx]; }
 
     // SIZE FindMonochromeBlockLocal( const EasyBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
     // {
@@ -403,47 +404,29 @@ struct EasyBitMap
 //     ~AcquireFocus_() { BringToForeground( LastForegroundWindow ); }
 // };
 
-struct VirtualDeviceContext_
-{
-    HDC     hdcDestin;
-    HBITMAP hBMP;
-
-    VirtualDeviceContext_( const HDC& hdcSource, int w, int h )
-    {
-        hdcDestin = CreateCompatibleDC( hdcSource );
-        hBMP = CreateCompatibleBitmap( hdcSource, w, h );
-        SelectObject( hdcDestin, hBMP );
-    }
-
-    ~VirtualDeviceContext_()
-    {
-        DeleteObject( hBMP );
-        DeleteDC( hdcDestin );
-    }
-
-    operator HDC() { return hdcDestin; }
-};
-
 struct VirtualDeviceContext
 {
     HWND    Handle;
-    HDC     Destination,Source;
-    HBITMAP BitMap;
+    HDC     Destination{}, Source;
+    HBITMAP BitMap{};
 
-    VirtualDeviceContext( const HDC& hdcSource, int w, int h )
+    VirtualDeviceContext( HWND Handle_, SIZE Dimension ) : Handle{ Handle_ }
     {
-        Destination = CreateCompatibleDC( hdcSource );
-        BitMap = CreateCompatibleBitmap( hdcSource, w, h );
+        Source = GetDC( Handle );
+        if( Dimension == SIZE{ 0, 0 } ) return;
+        Destination = CreateCompatibleDC( Source );
+        BitMap = CreateCompatibleBitmap( Source, Dimension.cx, Dimension.cy );
         SelectObject( Destination, BitMap );
     }
 
     ~VirtualDeviceContext()
     {
-        DeleteObject( BitMap );
-        DeleteDC( Destination );
+        if( BitMap ) DeleteObject( BitMap );
+        if( Destination ) DeleteDC( Destination );
+        ReleaseDC( Handle, Source );
     }
 
-    operator HDC() { return Destination; }
+    operator HDC() const noexcept { return Source; }
 };
 
 struct EasyControl
@@ -630,39 +613,35 @@ struct EasyControl
 
     EasyBitMap CaptureRegion( POINT Origin, SIZE Dimension ) const
     {
-        int x{ Origin.x }, y{ Origin.y }, w{ Dimension.cx }, h{ Dimension.cy };
+        auto BitMap = EasyBitMap( Origin, Dimension );
 
-        EasyBitMap BitMap( Origin, Dimension );
+        if( Dimension == SIZE{ 0, 0 } ) return BitMap;
 
-        HDC  hdcSource = GetDC( Handle );
-        auto VirtualDC = VirtualDeviceContext_( hdcSource, w, h );
+        auto VirtualDC = VirtualDeviceContext( Handle, Dimension );
 
-        BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
+        auto [x, y] = Origin;
+        auto [w, h] = Dimension;
+        BitBlt( VirtualDC.Destination, 0, 0, w, h, VirtualDC.Source, x, y, SRCCOPY );
 
-        GetDIBits( VirtualDC, VirtualDC.hBMP, 0, h, BitMap.Pixels.data(), &BitMap.BitMapInformation, DIB_RGB_COLORS );
-
-        ReleaseDC( Handle, hdcSource );
+        GetDIBits( VirtualDC.Destination, VirtualDC.BitMap, 0, h,  //
+                   BitMap.Pixels.data(), &BitMap.BitMapInformation, DIB_RGB_COLORS );
 
         return BitMap;
     }
 
     inline bool MatchBitMap( const EasyBitMap& ReferenceBitMap, int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
-        //  need complete re-work
+        // need complete re-work
         // capture whole image than compare
+        (void)SimilarityThreshold;
 
+        auto VirtualDC = VirtualDeviceContext( Handle, ReferenceBitMap.Dimension );
+        auto [x, y] = ReferenceBitMap.Origin;
+        auto [w, h] = ReferenceBitMap.Dimension;
+        BitBlt( VirtualDC.Destination, 0, 0, w, h, VirtualDC.Source, x, y, SRCCOPY );
 
-        int x{ ReferenceBitMap.Origin.x }, y{ ReferenceBitMap.Origin.y },  //
-            w{ ReferenceBitMap.Dimension.cx }, h{ ReferenceBitMap.Dimension.cy };
-
-        HDC  hdcSource = GetDC( Handle );
-        auto VirtualDC = VirtualDeviceContext_( hdcSource, w, h );
-
-        BitBlt( VirtualDC, 0, 0, w, h, hdcSource, x, y, SRCCOPY );
-        ReleaseDC( Handle, hdcSource );
-
-        for( int pos{ 0 }, j{ 0 }; j < h; ++j )
-            for( int i{ 0 }; i < w; ++i, ++pos )
+        for( auto pos{ 0 }, j{ 0 }; j < h; ++j )
+            for( auto i{ 0 }; i < w; ++i, ++pos )
             {
                 if( ReferenceBitMap.Pixels[pos].rgbReserved == IGNORE_PIXEL ) continue;
 
@@ -683,7 +662,7 @@ struct EasyControl
 
     inline RGBQUAD GetColour( POINT Point ) { return CaptureRegion( Point, { 1, 1 } ).Pixels[0]; }
 
-    inline RGBQUAD GetColour( int x, int y ) { return GetColour( { x, y } ); }
+    inline RGBQUAD GetColour( LONG x, LONG y ) { return GetColour( { x, y } ); }
 
     void Run( void ( *Proc )( EasyControl& ) ) { Proc( *this ); }
     //#define Run(Proc) Run( (void (*)(CreateControl&)) Proc )
