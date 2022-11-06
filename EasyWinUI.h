@@ -13,6 +13,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <minwindef.h>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -150,12 +151,14 @@ namespace EWUI
             // case WM_ERASEBKGND : return true;
             case WM_PAINT :
             {
+                PAINTSTRUCT PS;
+                //auto        hdc = //
+                BeginPaint( hwnd, &PS );
                 for( auto&& [CanvasHandle, CanvasContent] : CanvasContainer )
                 {
                     if( GetParent( CanvasHandle ) == hwnd )
                     {
                         auto&& [BI, Pixels] = CanvasContent;
-                        //ValidateRect( CanvasHandle, NULL );
                         auto hdc = GetDC( CanvasHandle );
                         SetDIBitsToDevice( hdc, 0, 0, std::abs( BI.bmiHeader.biWidth ),
                                            std::abs( BI.bmiHeader.biHeight ), 0, 0, 0,
@@ -163,6 +166,7 @@ namespace EWUI
                         ReleaseDC( CanvasHandle, hdc );
                     }
                 }
+                EndPaint( hwnd, &PS );
                 break;
             }
             case WM_COMMAND :
@@ -322,10 +326,15 @@ namespace EWUI
         }
 
         auto Content() const noexcept { return TextContent(); }
+
+        template<std::integral T>
         auto NumbericContent() const noexcept
         {
             auto Text = TextContent();
-            return ( std::ranges::all_of( Text, []( auto c ) { return std::isdigit( c ); } ) ) ? std::stoi( Text ) : 0;
+            // return std::ranges::all_of( Text, []( auto c ) { return std::isdigit( c ); } )
+            //            ? static_cast<T>( std::stoll( Text ) )
+            //            : T{};
+            return std::ranges::all_of( Text, ::isdigit ) ? static_cast<T>( std::stoll( Text ) ) : T{};
         }
 
         auto operator=( std::string_view IncomingContent ) const noexcept { return SetLabel( IncomingContent ); }
@@ -427,6 +436,14 @@ namespace EWUI
             if( SelectedIndex == LB_ERR ) return LRESULT{ 0 };
             return SendMessage( Handle, LB_GETITEMDATA, SelectedIndex, AlwaysZero );
         }
+
+        auto SelectItem( LRESULT ListIndex ) const noexcept
+        {
+            if( ListIndex >= SendMessage( Handle, LB_GETCOUNT, AlwaysZero, AlwaysZero ) ) return LRESULT{ LB_ERR };
+            return SendMessage( Handle, LB_SETCURSEL, ListIndex, AlwaysZero );
+        }
+
+        auto SelectFirstItem() const noexcept { return SelectItem( 0 ); }
 
         auto Reset() const noexcept { SendMessage( Handle, LB_RESETCONTENT, AlwaysZero, AlwaysZero ); }
     };

@@ -243,7 +243,7 @@ struct EasyBitMap
         Pixels.resize( Dimension.cx * Dimension.cy );
     }
 
-    EasyBitMap IsolateColour( RGBQUAD KeepColour, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+    auto IsolateColour( RGBQUAD KeepColour, int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
     {
         EasyBitMap NewMap{ *this };
         for( auto&& CurrentPixel : NewMap.Pixels )
@@ -252,6 +252,15 @@ struct EasyBitMap
                 CurrentPixel = { .rgbReserved = IGNORE_PIXEL };
             }
         // else CurrentPixel = KeepColour;
+        return NewMap;
+    }
+
+    auto ExtractByColour( RGBQUAD TargetColour, int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
+    {
+        EasyBitMap NewMap{ *this };
+        for( auto&& CurrentPixel : NewMap.Pixels )
+            if( ! Similar( CurrentPixel, TargetColour, SimilarityThreshold ) )
+                CurrentPixel = { .rgbReserved = IGNORE_PIXEL };
         return NewMap;
     }
 
