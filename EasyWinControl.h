@@ -16,7 +16,7 @@ COLORREF colour = Control.GetColour(x,y);
 
 //#include <EasyNotepad.h>
 #include <cstdint>
-#include <Windows.h>
+#include <windows.h>
 #include <gdiplus.h>
 
 #include <algorithm>

@@ -11,7 +11,7 @@
 
 namespace
 {
-    inline struct Notepad_
+    struct Notepad_
     {
         struct exe_
         {
@@ -50,7 +50,7 @@ namespace
                 {
                     auto NewTextLength = SendMessage( AppHandle, WM_GETTEXTLENGTH, 0, 0 ) + IncomingText.length() + 1;
                     auto NewText = std::string( NewTextLength, '\0' );
-                    LRESULT JumpStartIndex =
+                    auto JumpStartIndex =
                         SendMessage( AppHandle, WM_GETTEXT, NewTextLength, reinterpret_cast<LPARAM>( NewText.data() ) );
                     memcpy( NewText.data() + JumpStartIndex, IncomingText.data(), IncomingText.length() + 1 );
                     SendMessageProxy( AppHandle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( NewText.data() ) );
@@ -69,11 +69,12 @@ namespace
             }
 
             void operator>>( const char* MessageSink ) { AppName = MessageSink == NULL ? NULL : AppName; }
-                 operator const char*() { return AppName; }
+
+            operator const char*() const { return AppName; }
 
             void Clear()
             {
-                if( IsWindow(AppHandle) )
+                if( IsWindow( AppHandle ) )
                     SendMessageProxy( AppHandle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( "" ) );
             }
 
@@ -89,8 +90,9 @@ namespace
         } exe;
 
         Notepad_& operator++( int );
-    } Notepad{ "C:\\Windows\\System32\\notepad.exe", "Edit", SendMessage },
-        NotepadPlusPlus{ "C:\\Program Files\\Notepad++\\notepad++.exe", "Scintilla", SendMessageW };
-    inline Notepad_& Notepad_::operator++( int ) { return NotepadPlusPlus; }
+    };
 }  // namespace
+inline Notepad_  Notepad{ "C:\\Windows\\System32\\notepad.exe", "Edit", SendMessage };
+inline Notepad_  NotepadPlusPlus{ "C:\\Program Files\\Notepad++\\notepad++.exe", "Scintilla", SendMessageW };
+inline Notepad_& Notepad_::operator++( int ) { return NotepadPlusPlus; }
 #endif

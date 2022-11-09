@@ -1,7 +1,7 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
-#include <Windows.h>
+#include <windows.h>
 #include <CommCtrl.h>
 
 #include <algorithm>
@@ -20,6 +20,7 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <winnt.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -54,31 +55,6 @@ namespace
     // {
     //     return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
     // }
-
-    inline void PrintMSG( std::string_view PrefixString, MSG Msg )
-    {
-        // ignore messages
-        switch( Msg.message )
-        {
-            case WM_MOUSEMOVE :
-            case WM_SIZE :
-            case WM_TIMER :
-            case WM_NCMOUSEMOVE :
-            case WM_NCMOUSELEAVE :
-            case WM_NCLBUTTONDOWN :
-            case WM_LBUTTONDOWN :
-            case 96 : return;
-            default : break;
-        }
-
-        //if( MonitorHandle == NULL || Msg.hwnd != MonitorHandle ) return;
-        auto w10 = std::setw( 12 );
-        auto w5 = std::setw( 5 );
-        std::cout << PrefixString << '\t' << w10 << Msg.message                                       //
-                  << w10 << Msg.wParam << w10 << HIWORD( Msg.wParam ) << w10 << LOWORD( Msg.wParam )  //
-                  << w10 << Msg.lParam << w10 << HIWORD( Msg.lParam ) << w10 << LOWORD( Msg.lParam )  //
-                  << std::endl;
-    }
 
     template<std::size_t N>
     struct FixedString
@@ -320,6 +296,11 @@ namespace EWUI
             ExStyle = WS_EX_LEFT;
         }
 
+        auto SetContent( std::string_view IncomingContent ) const noexcept
+        {
+            SetWindowText( Handle, IncomingContent.data() );
+        }
+
         auto SetLabel( std::string_view IncomingContent ) const noexcept
         {
             SetWindowText( Handle, IncomingContent.data() );
@@ -327,17 +308,19 @@ namespace EWUI
 
         auto Content() const noexcept { return TextContent(); }
 
-        template<std::integral T>
+        template<std::integral T = LONG>
         auto NumbericContent() const noexcept
         {
             auto Text = TextContent();
-            // return std::ranges::all_of( Text, []( auto c ) { return std::isdigit( c ); } )
-            //            ? static_cast<T>( std::stoll( Text ) )
-            //            : T{};
-            return std::ranges::all_of( Text, ::isdigit ) ? static_cast<T>( std::stoll( Text ) ) : T{};
+            if( ! std::ranges::all_of( Text, ::isdigit ) ) return T{ 0 };
+
+            if constexpr( std::is_signed_v<T> )
+                return static_cast<T>( std::stoll( Text ) );
+            else
+                return static_cast<T>( std::stoull( Text ) );
         }
 
-        auto operator=( std::string_view IncomingContent ) const noexcept { return SetLabel( IncomingContent ); }
+        auto operator=( std::string_view IncomingContent ) const noexcept { return SetContent( IncomingContent ); }
     };
 
     struct TextLabelControl : Control
@@ -382,7 +365,7 @@ namespace EWUI
     {
         constexpr EditControl() noexcept { ClassName = WC_EDIT; }
 
-        using Control::operator=;
+        //using Control::operator=;
     };
 
     struct TextBoxControl : EditControl
