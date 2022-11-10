@@ -82,16 +82,6 @@ namespace
         return std::string_view{ Buffer } == TargetClassName;
     }
 
-    inline auto NameOfHandle( HWND Handle )
-    {
-        std::string ResultString;
-        ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
-                                           [Handle = Handle]( auto Buffer, auto BufferSize ) {
-                                               return GetWindowText( Handle, Buffer, BufferSize + 1 );
-                                           } );
-        return ResultString;
-    }
-
 }  // namespace
 
 namespace EWUI
@@ -402,21 +392,27 @@ namespace EWUI
             AddStyle( WS_VSCROLL | LBS_USETABSTOPS | LBS_WANTKEYBOARDINPUT | LBS_HASSTRINGS );
         }
 
-        void operator<<( const DataContainer& Source ) const noexcept
+        auto Reset() const noexcept { return SendMessage( Handle, LB_RESETCONTENT, AlwaysZero, AlwaysZero ); }
+
+        void AddItem( auto Key, std::string_view DisplayString ) const noexcept
         {
             if( ! Handle ) return;
-            for( auto&& [ItemData, DisplayString] : Source )
-            {
-                auto ListIndex =
-                    SendMessage( Handle, LB_ADDSTRING, AlwaysZero, std::bit_cast<LPARAM>( DisplayString.c_str() ) );
-                SendMessage( Handle, LB_SETITEMDATA, ListIndex, std::bit_cast<LPARAM>( ItemData ) );
-            }
+            auto ListIndex =
+                SendMessage( Handle, LB_ADDSTRING, AlwaysZero, std::bit_cast<LPARAM>( DisplayString.data() ) );
+            SendMessage( Handle, LB_SETITEMDATA, ListIndex, std::bit_cast<LPARAM>( Key ) );
+        };
+
+        void SetContent( const DataContainer& Source ) const noexcept
+        {
+            if( ! Handle ) return;
+            Reset();
+            for( auto&& [Key, DisplayString] : Source ) AddItem( Key, DisplayString );
         };
 
         auto Selection() const noexcept
         {
             auto SelectedIndex = SendMessage( Handle, LB_GETCURSEL, AlwaysZero, AlwaysZero );
-            if( SelectedIndex == LB_ERR ) return LRESULT{ 0 };
+            if( SelectedIndex == LB_ERR ) return SelectedIndex;
             return SendMessage( Handle, LB_GETITEMDATA, SelectedIndex, AlwaysZero );
         }
 
@@ -427,8 +423,6 @@ namespace EWUI
         }
 
         auto SelectFirstItem() const noexcept { return SelectItem( 0 ); }
-
-        auto Reset() const noexcept { SendMessage( Handle, LB_RESETCONTENT, AlwaysZero, AlwaysZero ); }
     };
 
 

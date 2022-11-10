@@ -37,6 +37,7 @@ COLORREF colour = Control.GetColour(x,y);
 #include <windef.h>
 #include <wingdi.h>
 #include <winnt.h>
+#include <functional>
 
 
 #define SIMILARITY_THRESHOLD 20
@@ -103,12 +104,13 @@ constexpr auto operator"" _VK( char ch )
     return static_cast<WPARAM>( ch );
 }
 
-inline auto GetWindowHandleAll()
+inline auto GetWindowHandleAll( HWND ParentHandle = nullptr )
 {
     std::vector<HWND> Handles;
     Handles.reserve( 256 );
 
-    EnumWindows(
+    EnumChildWindows(
+        ParentHandle,
         []( HWND Handle, LPARAM lParam_ ) -> WINBOOL {
             reinterpret_cast<std::vector<HWND>*>( lParam_ )->push_back( Handle );
             return true;
@@ -149,6 +151,22 @@ inline auto GetWindowHandleByName_( std::string_view Name )
                               return FoundBy( GetClassName ) || FoundBy( GetWindowText );
                           } );
     return Results;
+}
+
+inline auto NameOfHandle( HWND Handle )
+{
+    std::string ResultString;
+    ResultString.resize_and_overwrite(
+        GetWindowTextLength( Handle ),
+        [Handle = Handle]( auto Buffer, auto BufferSize ) { return GetWindowText( Handle, Buffer, BufferSize + 1 ); } );
+    return ResultString;
+}
+
+inline auto ClassNameOfHandle( HWND Handle )
+{
+    std::string ResultString;
+    ResultString.resize_and_overwrite( 256uz, std::bind_front( GetWindowText, Handle ) );
+    return ResultString;
 }
 
 [[deprecated( "use alternative overload version" )]]  //
