@@ -118,14 +118,14 @@ namespace
         auto end() { return Sentinel{}; }
     };
 
-    inline auto Benchmark( std::string&& BenchmarkTitle )
-    {
-        std::cout << "Benchmarking... " << BenchmarkTitle << "\n";
-        BenchmarkResults.push_back( { " " + BenchmarkTitle, 0, 0 } );
-        return BenchmarkContainer{ BenchmarkResults.back() };
-    }
 }  // namespace
 
+inline auto Benchmark( std::string&& BenchmarkTitle )
+{
+    std::cout << "Benchmarking... " << BenchmarkTitle << "\n";
+    BenchmarkResults.push_back( { " " + BenchmarkTitle, 0, 0 } );
+    return BenchmarkContainer{ BenchmarkResults.back() };
+}
 #endif /* BENCHMARK_H */
 
 
@@ -157,7 +157,8 @@ int main()
         for( volatile int i = 0; i < 100; ++i )
         {}
     }
-    for( auto _ : Benchmark( "Random Stuff" ) ) [[maybe_unused]] int a = 0;
+    for( auto _ : Benchmark( "Random Stuff" ) ) [[maybe_unused]]
+        int a = 0;
     for( auto _ : Benchmark( "What if I have an extremely long title ?" ) )
     {}
 }
