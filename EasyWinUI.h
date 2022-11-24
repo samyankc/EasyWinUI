@@ -20,6 +20,8 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <queue>
+#include <mutex>
 #include <winnt.h>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
@@ -101,6 +103,7 @@ namespace EWUI
 
     constexpr auto EmptyAction = [] {};
     using ControlAction = std::function<void()>;
+
     inline std::map<HWND, ControlAction> ActionContainer;
 
     //using ByteVector = std::vector<BYTE>;
