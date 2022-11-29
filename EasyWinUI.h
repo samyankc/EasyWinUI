@@ -1,6 +1,8 @@
 #ifndef EASYWINUI_H
 #define EASYWINUI_H
 
+#include <bits/chrono.h>
+#include <ostream>
 #include <windows.h>
 #include <CommCtrl.h>
 
@@ -23,6 +25,7 @@
 #include <queue>
 #include <mutex>
 #include <winnt.h>
+#include <chrono>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -105,6 +108,18 @@ namespace EWUI
     using ControlAction = std::function<void()>;
 
     inline std::map<HWND, ControlAction> ActionContainer;
+    inline std::map<HWND, ControlAction> OnChangeEventContainer;
+
+    using namespace std::chrono;
+    using namespace std::literals::chrono_literals;
+    struct CancellableThread
+    {
+        time_point<steady_clock> ExecutionTimePoint;
+        std::thread              Thread;
+        std::atomic_flag         CancellationToken;
+    };
+    inline std::map<HWND, CancellableThread> OnChangeEventThreadContainer;
+
 
     //using ByteVector = std::vector<BYTE>;
     using CanvasContent = std::pair<BITMAPINFO, std::vector<RGBQUAD>>;
@@ -140,8 +155,46 @@ namespace EWUI
             }
             case WM_COMMAND :
             {
-                if( ActionContainer.contains( std::bit_cast<HWND>( lParam ) ) )
-                    std::thread( ActionContainer[std::bit_cast<HWND>( lParam )] ).detach();
+                auto ControlHandle = std::bit_cast<HWND>( lParam );
+                auto ControlIdentifier = LOWORD( wParam );
+                auto NotificationCode = HIWORD( wParam );
+                switch( NotificationCode )
+                {
+                    case BN_CLICKED :
+                    {
+                        if( ActionContainer.contains( ControlHandle ) )
+                            std::thread( ActionContainer[ControlHandle] ).detach();
+                        break;
+                    }
+                    case EN_CHANGE :
+                    {
+                        //std::cout << "EN_CHANGE" << std::endl;
+                        auto& CurrentEvent = OnChangeEventThreadContainer[ControlHandle];
+
+                        // if thread not started
+                        if( CurrentEvent.ExecutionTimePoint == time_point<steady_clock>{} )
+                        {
+                            CurrentEvent.ExecutionTimePoint = steady_clock::now() + 700ms;
+                            std::thread( [ControlHandle = ControlHandle,
+                                          &ExecutionTimePoint = CurrentEvent.ExecutionTimePoint] {
+                                while( steady_clock::now() < ExecutionTimePoint ) std::this_thread::yield();
+                                std::cout << "EN_CHANGE Handled  " << GetWindowTextLength( ControlHandle ) << std::endl;
+                                ExecutionTimePoint = {};  // time_point<steady_clock>{};
+                            } ).detach();
+                        }
+                        else
+                        {
+                            CurrentEvent.ExecutionTimePoint = steady_clock::now() + 400ms;
+                            std::cout << "EN_CHANGE Skipped" << std::endl;
+                        }
+                        break;
+                    }
+                    default :
+                        // std::cout << "ControlHandle: \t" << ControlHandle << std::endl;
+                        // std::cout << "ControlIdentifier: \t" << ControlIdentifier << std::endl;
+                        // std::cout << "NotificationCode: \t" << NotificationCode << std::endl;
+                        break;
+                }
                 break;
             }
             case WM_CLOSE :
@@ -274,6 +327,13 @@ namespace EWUI
     constexpr auto Origin = MakeConfigurator( &ControlConfiguration::Origin );
     constexpr auto Dimension = MakeConfigurator( &ControlConfiguration::Dimension );
 
+    struct OnChangeEvent
+    {
+        std::chrono::milliseconds Debounce;
+        ControlAction             Action;
+        OnChangeEvent( const auto& Debounce, const auto& Action ) : Debounce{ Debounce }, Action{ Action } {}
+    };
+
     struct Control : ControlConfiguration
     {
         constexpr operator HWND() const noexcept { return Handle; }
@@ -357,8 +417,6 @@ namespace EWUI
     struct EditControl : Control
     {
         constexpr EditControl() noexcept { ClassName = WC_EDIT; }
-
-        //using Control::operator=;
     };
 
     struct TextBoxControl : EditControl
