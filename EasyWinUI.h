@@ -93,6 +93,98 @@ namespace EWUI
 {
     int Main();
 
+    struct ThreadPool
+    {
+        using TaskType = std::function<void()>;
+        using TaskQueueType = std::queue<TaskType>;
+        struct Worker
+        {
+            TaskType          Task;
+            std::atomic<bool> Idle;
+            std::atomic<bool> Spinning;
+
+            Worker() : Idle{ true }, Spinning{ true }
+            {
+                std::thread( [this] {
+                    while( Spinning )
+                    {
+                        Idle.wait( true, std::memory_order_acquire );
+                        if( Task ) Task();
+                        Idle.store( true, std::memory_order_release );
+                    }
+                } ).detach();
+            }
+
+            void Activate()
+            {
+                Idle.store( false, std::memory_order_release );
+                Idle.notify_one();
+            }
+
+            bool Available()
+            {
+                if( Idle.load( std::memory_order_acquire ) ) return true;
+                Idle.notify_one();
+                return false;
+            }
+
+            ~Worker()
+            {
+                Spinning.store( false );
+                Task = nullptr;
+                if( Idle ) Activate();
+            }
+        };
+
+        constexpr static auto ThreadCount = 4uz;
+
+        inline static auto Workers = std::vector<Worker>( ThreadCount );
+
+        inline static auto TaskQueue = TaskQueueType{};
+        inline static auto TaskQueueFilled = std::atomic<bool>{};
+        inline static auto TaskQueueMutex = std::mutex{};
+        inline static auto TaskDistributor =
+            ( std::thread( [] {
+                  while( true )
+                  {
+                      TaskQueueFilled.wait( false, std::memory_order_acquire );
+
+                      auto IdleWorker = std::ranges::find_if( Workers, &Worker::Available );
+
+                      if( IdleWorker != Workers.end() )
+                      {
+                          auto& W = *IdleWorker;
+                          W.Task = std::move( TaskQueue.front() );
+                          W.Activate();
+                          {
+                              std::scoped_lock Lock( TaskQueueMutex );
+                              TaskQueue.pop();
+                              if( TaskQueue.empty() ) TaskQueueFilled.store( false, std::memory_order_release );
+                          }
+                      }
+                  }
+              } ).detach(),
+              0 );
+
+        static void WaitComplete()
+        {
+            while( ! TaskQueue.empty() )
+            {
+                TaskQueueFilled.notify_one();
+                std::this_thread::yield();
+            }
+            while( ! std::ranges::all_of( Workers, &Worker::Available ) ) std::this_thread::yield();
+        }
+
+        static void Execute( TaskType NewTask )
+        {
+            std::scoped_lock Lock( TaskQueueMutex );
+            TaskQueue.push( std::move( NewTask ) );
+            TaskQueueFilled.store( true, std::memory_order_release );
+            TaskQueueFilled.notify_one();
+        }
+    };
+
     struct Spacer
     {
         int x{};
@@ -163,7 +255,8 @@ namespace EWUI
                     case BN_CLICKED :
                     {
                         if( ActionContainer.contains( ControlHandle ) )
-                            std::thread( ActionContainer[ControlHandle] ).detach();
+                            //std::thread( ActionContainer[ControlHandle] ).detach();
+                            ThreadPool::Execute( ActionContainer[ControlHandle] );
                         break;
                     }
                     case EN_CHANGE :
