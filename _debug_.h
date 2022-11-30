@@ -1,19 +1,28 @@
 #ifndef CUSTOM_DEBUG_H
 #define CUSTOM_DEBUG_H
 
+#include <cstddef>
 #include <cstdio>
 #include <atomic>
 #include <mutex>
+#include <thread>
+#include <map>
 
-inline void ThreadPrint( std::string_view Content, std::size_t ColumnWidth = 30 )
+inline void ThreadPrint( std::string_view Content, int ColumnWidth = 30 )
 {
-    static std::atomic<std::size_t> ThreadPrintOffsetMark{ 0 };
-    thread_local std::size_t        PrintOffset = ColumnWidth * ( ThreadPrintOffsetMark++ );
+    static auto ThreadPrintOffsetMark = std::atomic<int>{ 0 };
+    static auto ThreadPrintOffset = std::map<std::thread::id, int>{};
+
+    //static thread_local std::size_t PrintOffset = ColumnWidth * ( ThreadPrintOffsetMark++ );
+
+    auto ID = std::this_thread::get_id();
 
     static std::mutex InternalMutex;
     std::scoped_lock  Lock( InternalMutex );
 
-    printf( "%*s\n", PrintOffset, Content.data() );
+    if( ! ThreadPrintOffset.contains( ID ) ) ThreadPrintOffset[ID] = ColumnWidth * ( ThreadPrintOffsetMark++ );
+
+    printf( "%*c%s\n", ThreadPrintOffset[ID], ' ', Content.data() );
     fflush( stdout );
 }
 
