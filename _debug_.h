@@ -18,7 +18,7 @@ inline void ThreadPrint( std::string_view Content, int ColumnWidth = 30 )
     auto ID = std::this_thread::get_id();
 
     static std::mutex InternalMutex;
-    std::scoped_lock  Lock( InternalMutex );
+    std::scoped_lock Lock( InternalMutex );
 
     if( ! ThreadPrintOffset.contains( ID ) ) ThreadPrintOffset[ID] = ColumnWidth * ( ThreadPrintOffsetMark++ );
 
@@ -55,7 +55,6 @@ void DumpBinary( const T& src, int bytes = 1 )
     }
     putchar( '\n' );
 }
-
 
 template<typename Type>
 void TypeOf( Type&& )
