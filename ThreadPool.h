@@ -60,7 +60,7 @@ struct ThreadPool
 
     inline static auto Workers = std::vector<Worker>( ThreadCount );
 
-    inline static auto AssignTask( TaskType&& NewTask )
+    inline static auto WorkersAccept( TaskType&& NewTask )
     {
         if( auto IdleWorker = std::ranges::find_if( Workers, &Worker::Available );  //
             IdleWorker != Workers.end() )
@@ -79,7 +79,7 @@ struct ThreadPool
                                                while( true )
                                                {
                                                    TaskQueueFilled.wait( false, std::memory_order_acquire );
-                                                   if( AssignTask( std::move( TaskQueue.front() ) ) )
+                                                   if( WorkersAccept( std::move( TaskQueue.front() ) ) )
                                                    {
                                                        std::scoped_lock Lock( TaskQueueMutex );
                                                        TaskQueue.pop();
@@ -109,7 +109,7 @@ struct ThreadPool
         std::scoped_lock Lock( TaskQueueMutex );
 
         // try to skip Task Queue if empty
-        if( TaskQueue.empty() && AssignTask( std::move( NewTask ) ) ) return;
+        if( TaskQueue.empty() && WorkersAccept( std::move( NewTask ) ) ) return;
 
         TaskQueue.push( std::move( NewTask ) );
         TaskQueueFilled.store( true, std::memory_order_release );
