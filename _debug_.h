@@ -8,6 +8,19 @@
 #include <thread>
 #include <map>
 
+struct OnColumn
+{
+    int ColumnOffset;
+
+    OnColumn( int ColumnIndex, int ColumnWidth = 30 ) : ColumnOffset( ColumnIndex * ColumnWidth ) {}
+
+    void Print( std::string_view Content )
+    {
+        printf( "%*c%s\n", ColumnOffset, ' ', Content.data() );
+        fflush( stdout );
+    }
+};
+
 inline void ThreadPrint( std::string_view Content, int ColumnWidth = 30 )
 {
     static auto ThreadPrintOffsetMark = std::atomic<int>{ 0 };
