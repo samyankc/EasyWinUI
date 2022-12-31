@@ -10,16 +10,21 @@
 
 struct OnColumn
 {
-    int ColumnOffset;
-
-    OnColumn( int ColumnIndex, int ColumnWidth = 30 ) : ColumnOffset( ColumnIndex * ColumnWidth ) {}
-
-    void Print( std::string_view Content )
+    int Offset;
+    void Print( const auto&... Content )
     {
-        printf( "%*c%s\n", ColumnOffset, ' ', Content.data() );
+        auto MakeString = []( const auto& c ) {
+            if constexpr( std::is_convertible_v<decltype( c ), std::string> )
+                return c;
+            else
+                return std::to_string( c );
+        };
+
+        printf( "%*c%s\n", Offset, ' ', ( MakeString( Content ) + ... ).c_str() );
         fflush( stdout );
     }
 };
+// OnColumn MainColumn{ 0 }, SideColumn{ 30 };
 
 inline void ThreadPrint( std::string_view Content, int ColumnWidth = 30 )
 {

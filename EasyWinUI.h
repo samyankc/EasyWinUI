@@ -26,6 +26,7 @@
 #include <mutex>
 #include <winnt.h>
 #include <chrono>
+#include <utility>
 
 #define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
@@ -82,9 +83,58 @@ namespace
     bool MatchClass( HWND Handle )
     {
         constexpr auto BufferSize = TargetClassName.BufferSize();
-        char           Buffer[BufferSize];
+        char Buffer[BufferSize];
         GetClassName( Handle, Buffer, BufferSize );
         return std::string_view{ Buffer } == TargetClassName;
+    }
+
+    using Clock = std::chrono::high_resolution_clock;
+
+    template<std::invocable Callable>
+    [[nodiscard]] auto Debounce( Clock::duration DebounceAmplitude, Callable&& Action )
+    {
+        struct DebounceAction
+        {
+            Callable Action;
+            Clock::duration DebounceAmplitude;
+            std::atomic<Clock::time_point> ScheduledInvokeTime;
+
+            DebounceAction( Callable&& Action, Clock::duration DebounceAmplitude )
+                : Action{ std::move( Action ) }, DebounceAmplitude{ DebounceAmplitude }
+            {}
+
+            DebounceAction( const DebounceAction& Source )
+                : DebounceAction( auto{ Source.Action }, Source.DebounceAmplitude )
+            {}
+
+            auto operator()()
+            {
+                if( ScheduledInvokeTime.exchange( Clock::now() + DebounceAmplitude ) == Clock::time_point{} )
+                {
+                    std::thread( [&] {
+                        while( true )
+                        {
+                            std::this_thread::sleep_until( ScheduledInvokeTime.load() );
+                            auto CurrentSchedule = ScheduledInvokeTime.load();
+                            if( Clock::now() >= CurrentSchedule &&  //
+                                ScheduledInvokeTime.compare_exchange_strong( CurrentSchedule, {} ) )
+                            {
+                                break;
+                            }
+                        }
+                        Action();
+                    } ).detach();
+                }
+            }
+        };
+
+        return DebounceAction{ std::move( Action ), DebounceAmplitude };
+    }
+
+    template<std::invocable Callable>
+    [[nodiscard]] auto Debounce( Callable&& Action )
+    {
+        return Debounce( std::chrono::milliseconds( 150 ), std::forward<Callable>( Action ) );
     }
 
 }  // namespace
@@ -99,7 +149,7 @@ namespace EWUI
         using TaskQueueType = std::queue<TaskType>;
         struct Worker
         {
-            TaskType          Task;
+            TaskType Task;
             std::atomic<bool> Idle;
             std::atomic<bool> Spinning;
 
@@ -207,11 +257,10 @@ namespace EWUI
     struct CancellableThread
     {
         time_point<steady_clock> ExecutionTimePoint;
-        std::thread              Thread;
-        std::atomic_flag         CancellationToken;
+        std::thread Thread;
+        std::atomic_flag CancellationToken;
     };
     inline std::map<HWND, CancellableThread> OnChangeEventThreadContainer;
-
 
     //using ByteVector = std::vector<BYTE>;
     using CanvasContent = std::pair<BITMAPINFO, std::vector<RGBQUAD>>;
@@ -313,8 +362,8 @@ namespace EWUI
     {
         HINSTANCE hInstance;
         HINSTANCE hPrevInstance;
-        LPCSTR    lpCmdLine;
-        int       nCmdShow;
+        LPCSTR lpCmdLine;
+        int nCmdShow;
     } EntryPointParamPack{};
 
     struct BasicWindowHandle
@@ -395,14 +444,14 @@ namespace EWUI
 
     struct ControlConfiguration : BasicWindowHandle
     {
-        std::optional<HWND>   Parent;
-        std::optional<HMENU>  MenuID;
+        std::optional<HWND> Parent;
+        std::optional<HMENU> MenuID;
         std::optional<LPCSTR> ClassName;
         std::optional<LPCSTR> Label;
-        std::optional<DWORD>  Style;
-        std::optional<DWORD>  ExStyle;
-        std::optional<POINT>  Origin;
-        std::optional<SIZE>   Dimension;
+        std::optional<DWORD> Style;
+        std::optional<DWORD> ExStyle;
+        std::optional<POINT> Origin;
+        std::optional<SIZE> Dimension;
     };
 
     constexpr auto MakeConfigurator = []<typename T>( std::optional<T> ControlConfiguration::*Field ) {
@@ -423,7 +472,7 @@ namespace EWUI
     struct OnChangeEvent
     {
         std::chrono::milliseconds Debounce;
-        ControlAction             Action;
+        ControlAction Action;
         OnChangeEvent( const auto& Debounce, const auto& Action ) : Debounce{ Debounce }, Action{ Action } {}
     };
 
@@ -579,7 +628,6 @@ namespace EWUI
         auto SelectFirstItem() const noexcept { return SelectItem( 0 ); }
     };
 
-
     struct ProgressBarControl : Control
     {
         constexpr ProgressBarControl() noexcept
@@ -631,7 +679,7 @@ namespace EWUI
     {
         constexpr static auto ChildSeparation = 10;
 
-        SIZE  RequiredDimension{};
+        SIZE RequiredDimension{};
         POINT AnchorOffset{ ChildSeparation, ChildSeparation };
 
         static HWND NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ )
@@ -841,7 +889,6 @@ namespace EWUI
         LHS.AnchorOffset = { WindowControl::ChildSeparation, LHS.RequiredDimension.cy };
         return std::forward<T>( LHS );
     }
-
 
 }  // namespace EWUI
 
