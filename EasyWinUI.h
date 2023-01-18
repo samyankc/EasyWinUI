@@ -88,8 +88,14 @@ namespace
         return std::string_view{ Buffer } == TargetClassName;
     }
 
-    using Clock = std::chrono::high_resolution_clock;
+}  // namespace
 
+
+namespace EWUI
+{
+    int Main();
+
+    using Clock = std::chrono::high_resolution_clock;
     template<std::invocable Callable>
     [[nodiscard]] auto Debounce( Clock::duration DebounceAmplitude, Callable&& Action )
     {
@@ -136,12 +142,6 @@ namespace
     {
         return Debounce( std::chrono::milliseconds( 150 ), std::forward<Callable>( Action ) );
     }
-
-}  // namespace
-
-namespace EWUI
-{
-    int Main();
 
     struct ThreadPool
     {

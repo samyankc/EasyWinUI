@@ -63,8 +63,8 @@ namespace index_range {
     {
         constexpr ReverseRange( Iter begin__, Iter end__ ) : RangeTemplate<ReverseIter<Iter> >( end__, begin__ ) {}
     };
-    
-    
+
+
 
     // using IndexIter = ForwardIter<SelfReferencing<long long> >;
     template<typename T, typename Iter = ForwardIter<SelfReferencing<T> > >
@@ -115,12 +115,3 @@ namespace index_range {
 
 #endif
 
-#ifdef TEST_CODE
-#include <iostream>
-int main()
-{
-    using namespace index_range;
-    for( auto x : Range( 1, 10 ) | Reverse() ) std::cout<< x <<' ';
-
-}
-#endif
