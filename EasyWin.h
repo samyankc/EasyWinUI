@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <CommCtrl.h>
 
+#include <EasyMeta.h>
+
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
@@ -37,60 +39,18 @@
 
 //#define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
+using namespace EasyMeta;
+using namespace std::chrono_literals;
+
 // helpers
 namespace
 {
-
-    constexpr inline auto MaxClassNameLength = 256uz;
     constexpr inline auto SIMILARITY_THRESHOLD = 30;
-
-    template<typename Derived, typename Base>
-    concept DerivedFrom = std::is_base_of_v<std::decay_t<Base>, std::decay_t<Derived>>;
-
-    template<typename TestClass, template<typename> typename TemplateClass>
-    struct SpecializationOf_impl : std::false_type
-    {};
-
-    template<template<typename> typename TemplateClass, typename T>
-    struct SpecializationOf_impl<TemplateClass<T>, TemplateClass> : std::true_type
-    {};
-
-    template<typename TestClass, template<typename> typename TemplateClass>
-    concept SpecializationOf = SpecializationOf_impl<TestClass, TemplateClass>::value;
-
-    template<typename TargetType, typename... CandidateTypes>
-    concept MatchExactType = ( std::same_as<TargetType, CandidateTypes> || ... );
-
-    template<typename TargetType, typename... CandidateTypes>
-    concept MatchType = MatchExactType<std::decay_t<TargetType>, std::decay_t<CandidateTypes>...>;
-
-    // template<MatchType<SIZE, POINT> T>
-    // bool operator==( const T& LHS, const T& RHS )
-    // {
-    //     return std::memcmp( &LHS, &RHS, sizeof( T ) ) == 0;
-    // }
-
-    template<std::size_t N>
-    struct FixedString
-    {
-        char data[N]{};
-
-        constexpr FixedString( const char ( &Src )[N] ) { std::ranges::copy( Src, data ); }
-        constexpr auto BufferSize() const noexcept { return N; }
-
-        // constexpr auto ToStringView() const noexcept { return std::string_view{ data }; }
-        // constexpr auto length() const noexcept { return ToStringView().length(); }
-
-        constexpr operator std::string_view() const noexcept { return { data }; }
-    };
-
-    template<std::size_t N>
-    FixedString( const char ( & )[N] ) -> FixedString<N>;
 
     template<FixedString TargetClassName>
     bool MatchClass( HWND Handle )
     {
-        constexpr auto BufferSize = TargetClassName.BufferSize();
+        constexpr auto BufferSize = std::size( TargetClassName );
         char Buffer[BufferSize];
         GetClassName( Handle, Buffer, BufferSize );
         return std::string_view{ Buffer } == TargetClassName;
@@ -103,7 +63,7 @@ namespace EW
     int Main();
 
     using Clock = std::chrono::high_resolution_clock;
-    template<std::invocable Callable>
+    template<std::invocable Callable, typename ThreadProvider = std::thread>
     [[nodiscard]] auto Debounce( Clock::duration DebounceAmplitude, Callable&& Action )
     {
         struct DebounceAction
@@ -124,7 +84,7 @@ namespace EW
             {
                 if( ScheduledInvokeTime.exchange( Clock::now() + DebounceAmplitude ) == Clock::time_point{} )
                 {
-                    std::thread( [&] {
+                    ThreadProvider( [&] {
                         while( true )
                         {
                             std::this_thread::sleep_until( ScheduledInvokeTime.load() );
@@ -147,7 +107,7 @@ namespace EW
     template<std::invocable Callable>
     [[nodiscard]] auto Debounce( Callable&& Action )
     {
-        return Debounce( std::chrono::milliseconds( 150 ), std::forward<Callable>( Action ) );
+        return Debounce( 150ms, std::forward<Callable>( Action ) );
     }
 
     struct ThreadPool
@@ -259,11 +219,9 @@ namespace EW
     inline std::map<HWND, ControlAction> ActionContainer;
     inline std::map<HWND, ControlAction> OnChangeEventContainer;
 
-    using namespace std::chrono;
-    using namespace std::literals::chrono_literals;
     struct CancellableThread
     {
-        time_point<steady_clock> ExecutionTimePoint;
+        std::chrono::time_point<Clock> ExecutionTimePoint;
         std::thread Thread;
         std::atomic_flag CancellationToken;
     };
@@ -321,19 +279,19 @@ namespace EW
                         auto& CurrentEvent = OnChangeEventThreadContainer[ControlHandle];
 
                         // if thread not started
-                        if( CurrentEvent.ExecutionTimePoint == time_point<steady_clock>{} )
+                        if( CurrentEvent.ExecutionTimePoint == std::chrono::time_point<Clock>{} )
                         {
-                            CurrentEvent.ExecutionTimePoint = steady_clock::now() + 700ms;
+                            CurrentEvent.ExecutionTimePoint = Clock::now() + 700ms;
                             std::thread( [ControlHandle = ControlHandle,
                                           &ExecutionTimePoint = CurrentEvent.ExecutionTimePoint] {
-                                while( steady_clock::now() < ExecutionTimePoint ) std::this_thread::yield();
+                                while( Clock::now() < ExecutionTimePoint ) std::this_thread::yield();
                                 std::cout << "EN_CHANGE Handled  " << GetWindowTextLength( ControlHandle ) << std::endl;
                                 ExecutionTimePoint = {};  // time_point<steady_clock>{};
                             } ).detach();
                         }
                         else
                         {
-                            CurrentEvent.ExecutionTimePoint = steady_clock::now() + 400ms;
+                            CurrentEvent.ExecutionTimePoint = Clock::now() + 400ms;
                             std::cout << "EN_CHANGE Skipped" << std::endl;
                         }
                         break;
@@ -806,7 +764,7 @@ namespace EW
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
-            return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
+            return auto{ auto{ LHS } << RHS };
         }
         else
         {
@@ -830,7 +788,7 @@ namespace EW
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
         {
-            return std::decay_t<T>( std::decay_t<T>( LHS ) << RHS );
+            return auto{ auto{ LHS } << RHS };
         }
         else
         {
