@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <string_view>
+#include <array>
 
 namespace EasyMeta
 {
@@ -28,16 +29,31 @@ namespace EasyMeta
     template<typename TargetType, typename... CandidateTypes>
     concept MatchType = MatchExactType<std::decay_t<TargetType>, std::decay_t<CandidateTypes>...>;
 
-    template<std::size_t N>
+    template<std::size_t N, typename CharT>
     struct FixedString
     {
-        char data[N]{};
-        constexpr FixedString( const char ( &Src )[N] ) { std::copy_n( Src, N, data ); }
-        constexpr operator std::string_view() const noexcept { return { data, N }; }
-        constexpr auto size() const noexcept { return N; }
+        CharT data[N];
+        constexpr FixedString( const CharT ( &Src )[N] ) { std::copy_n( Src, N, data ); }
+        constexpr operator std::basic_string_view<CharT>() const noexcept { return { data }; }
+        //constexpr auto sv() const noexcept { return std::basic_string_view{ data }; }
+        constexpr auto operator[]( std::size_t i ) const noexcept { return data[i]; }
+        constexpr auto BufferSize() const noexcept { return N; }
     };
 
-    // template<std::size_t N> FixedString( const char ( & )[N] ) -> FixedString<N>; // deduction guide not needed ?
+    //template<std::size_t N, typename CharT> FixedString( const CharT ( & )[N] ) -> FixedString<N, CharT>;
+
+    template<typename NewCharT, FixedString Src>
+    consteval auto MakeFixedString()
+    {
+        constexpr auto PrecisionPreservation =
+            std::ranges::all_of( Src.data, []( auto c ) { return c <= std::numeric_limits<NewCharT>::max(); } );
+
+        static_assert( PrecisionPreservation, "Loss of Precision From Conversion" );
+
+        NewCharT data[Src.BufferSize()]{};
+        std::ranges::copy( Src.data, data );
+        return FixedString{ data };
+    }
 
 }  // namespace EasyMeta
 #endif

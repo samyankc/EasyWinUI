@@ -47,13 +47,36 @@ namespace
 {
     constexpr inline auto SIMILARITY_THRESHOLD = 30;
 
+    template<std::integral IntegerType>
+    constexpr auto Unsigned( IntegerType N ) noexcept
+    {
+        return static_cast<std::make_unsigned_t<IntegerType>>( N );
+    }
+
+    template<std::integral IntegerType>
+    constexpr auto ABS( IntegerType N ) noexcept
+    {
+        //using Unsigned = std::make_unsigned_t<IntegerType>;
+        if( N > 0 )
+            return Unsigned( N );
+        else
+            return 0 - Unsigned( N );
+    }
+
+    template<std::integral IntegerType>
+    constexpr auto Delta( IntegerType Begin, IntegerType End ) noexcept
+    {
+        return End - Begin;
+    }
+
     template<FixedString TargetClassName>
     bool MatchClass( HWND Handle )
     {
-        constexpr auto BufferSize = std::size( TargetClassName );
-        char Buffer[BufferSize];
+        using CharT = decltype( TargetClassName[0] );
+        constexpr auto BufferSize = TargetClassName.BufferSize();
+        CharT Buffer[BufferSize];
         GetClassName( Handle, Buffer, BufferSize );
-        return std::string_view{ Buffer } == TargetClassName;
+        return std::basic_string_view{ Buffer } == TargetClassName;
     }
 
 }  // namespace
@@ -250,9 +273,10 @@ namespace EW
                     {
                         auto&& [BI, Pixels] = CanvasContent;
                         auto hdc = GetDC( CanvasHandle );
-                        SetDIBitsToDevice( hdc, 0, 0, std::abs( BI.bmiHeader.biWidth ),
-                                           std::abs( BI.bmiHeader.biHeight ), 0, 0, 0,
-                                           std::abs( BI.bmiHeader.biHeight ), Pixels.data(), &BI, DIB_RGB_COLORS );
+                        SetDIBitsToDevice( hdc, 0, 0,                         //
+                                           Unsigned( BI.bmiHeader.biWidth ),  //
+                                           Unsigned( BI.bmiHeader.biHeight ), 0, 0, 0,
+                                           Unsigned( BI.bmiHeader.biHeight ), Pixels.data(), &BI, DIB_RGB_COLORS );
                         ReleaseDC( CanvasHandle, hdc );
                     }
                 }
@@ -361,7 +385,7 @@ namespace EW
         auto ReSize( SIZE NewDimension ) const noexcept
         {
             auto ClientRect = RECT{ 0, 0, NewDimension.cx, NewDimension.cy };
-            AdjustWindowRect( &ClientRect, GetStyle(), false );
+            AdjustWindowRect( &ClientRect, Unsigned( GetStyle() ), false );
             auto NewWidth{ ClientRect.right - ClientRect.left },  //
                 NewHeight{ ClientRect.bottom - ClientRect.top };
             SetWindowPos( Handle, HWND_NOTOPMOST, 0, 0, NewWidth, NewHeight,
@@ -377,29 +401,29 @@ namespace EW
 
         auto AddStyle( DWORD NewStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_STYLE, GetStyle() | NewStyle );
+            return SetWindowLong( Handle, GWL_STYLE, Unsigned( GetStyle() ) | NewStyle );
         }
 
         auto RemoveStyle( DWORD TargetStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_STYLE, GetStyle() & ~TargetStyle );
+            return SetWindowLong( Handle, GWL_STYLE, Unsigned( GetStyle() ) & ~TargetStyle );
         }
 
         auto AddExStyle( DWORD NewExStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() | NewExStyle );
+            return SetWindowLong( Handle, GWL_EXSTYLE, Unsigned( GetExStyle() ) | NewExStyle );
         }
 
         auto RemoveExStyle( DWORD TargetExStyle ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_EXSTYLE, GetExStyle() & ~TargetExStyle );
+            return SetWindowLong( Handle, GWL_EXSTYLE, Unsigned( GetExStyle() ) & ~TargetExStyle );
         }
 
         auto TextContent() const noexcept
         {
             auto ResultString = std::string{};
             if( Handle )
-                ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
+                ResultString.resize_and_overwrite( Unsigned( GetWindowTextLength( Handle ) ),
                                                    [Handle = Handle]( auto Buffer, auto BufferSize ) {
                                                        return GetWindowText( Handle, Buffer, BufferSize + 1 );
                                                    } );
@@ -951,7 +975,7 @@ namespace EW
     inline auto NameOfHandle( HWND Handle )
     {
         std::string ResultString;
-        ResultString.resize_and_overwrite( GetWindowTextLength( Handle ),
+        ResultString.resize_and_overwrite( ABS( GetWindowTextLength( Handle ) ),
                                            [Handle = Handle]( auto Buffer, auto BufferSize ) {
                                                return GetWindowText( Handle, Buffer, BufferSize + 1 );
                                            } );
@@ -970,24 +994,9 @@ namespace EW
     {
         constexpr auto Span = []( auto& S ) { return std::span( reinterpret_cast<const BYTE( & )[4]>( S ) ); };
         return [=]( auto... i ) {
-            return ( ( std::abs( Span( LHS )[i] - Span( RHS )[i] ) <= SimilarityThreshold ) & ... );
-        }( 1, 2, 3 );
+            return ( ( ABS( Span( LHS )[i] - Span( RHS )[i] ) <= SimilarityThreshold ) & ... );
+        }( 1u, 2u, 3u );
     }
-
-    // struct Point
-    // {
-    //     LPARAM POINT_DATA;
-    //     constexpr Point( LPARAM _src ) : POINT_DATA( _src ) {}
-    //     constexpr Point( int x, int y ) : POINT_DATA( MAKELPARAM( x, y ) ) {}
-    //     constexpr         operator LPARAM&() { return POINT_DATA; }
-    //     constexpr Point   operator-() const { return { -x(), -y() }; }
-    //     constexpr Point   operator<<=( const Point& _offset ) const { return { x() + _offset.x(), y() + _offset.y() }; }
-    //     constexpr Point&  operator+=( const Point& _offset ) { return *this = { x() + _offset.x(), y() + _offset.y() }; }
-    //     constexpr int16_t x() const { return LOWORD( POINT_DATA ); }
-    //     constexpr int16_t y() const { return HIWORD( POINT_DATA ); }
-    //     constexpr friend bool operator==( const Point& lhs, const Point& rhs ) { return lhs.POINT_DATA == rhs.POINT_DATA; }
-    // };
-    // using Offset = Point;
 
     constexpr auto operator+( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x + RHS.x, LHS.y + RHS.y }; }
     constexpr auto operator-( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x - RHS.x, LHS.y - RHS.y }; }
@@ -1045,7 +1054,7 @@ namespace EW
             BitMapInformation.bmiHeader.biSizeImage = 0;
             BitMapInformation.bmiHeader.biCompression = BI_RGB;
 
-            Pixels.resize( Dimension.cx * Dimension.cy );
+            Pixels.resize( ABS( Dimension.cx * Dimension.cy ) );
         }
 
         auto IsolateColour( RGBQUAD KeepColour, int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
@@ -1069,9 +1078,12 @@ namespace EW
             return NewMap;
         }
 
-        auto GetColour( int x, int y ) { return Pixels[x + y * Dimension.cx]; }
+        auto GetColour( int x, int y ) { return Pixels[Unsigned( x + y * ( Dimension.cx ) )]; }
 
-        auto& operator[]( const POINT& CheckPoint ) { return Pixels[CheckPoint.x + CheckPoint.y * Dimension.cx]; }
+        auto& operator[]( const POINT& CheckPoint )
+        {
+            return Pixels[Unsigned( CheckPoint.x + CheckPoint.y * Dimension.cx )];
+        }
         //auto& operator[]( const LONG x, const LONG y ) { return Pixels[x + y * Dimension.cx]; }
 
         // SIZE FindMonochromeBlockLocal( const EasyBitMap& MonochromeMap, const POINT prelim, const POINT sentinel )
@@ -1151,8 +1163,10 @@ namespace EW
         {
             if( CanvasHandle == NULL ) return;
             HDC hdc = GetDC( CanvasHandle );
-            SetDIBitsToDevice( hdc, OffsetX, OffsetY, Dimension.cx, Dimension.cy,  //
-                               0, 0, 0, Dimension.cy, Pixels.data(), &BitMapInformation, DIB_RGB_COLORS );
+            SetDIBitsToDevice( hdc, OffsetX, OffsetY,              //
+                               Unsigned( Dimension.cx ),           //
+                               Unsigned( Dimension.cy ), 0, 0, 0,  //
+                               Unsigned( Dimension.cy ), Pixels.data(), &BitMapInformation, DIB_RGB_COLORS );
             ReleaseDC( CanvasHandle, hdc );
         }
 
@@ -1160,7 +1174,8 @@ namespace EW
 
         std::string Code()
         {
-            std::size_t x = Origin.x, y = Origin.y, w = Dimension.cx, h = Dimension.cy;
+            std::size_t x = Unsigned( Origin.x ), y = Unsigned( Origin.y ),  //
+                w = Unsigned( Dimension.cx ), h = Unsigned( Dimension.cy );
             std::ostringstream OSS;
             OSS << "{";
             OSS << "\n    {" << x << "," << y << "}, {" << w << "," << h << "},";
@@ -1285,7 +1300,7 @@ namespace EW
                         ShowHandleName( WindowHandles[i] );
                     }
                     std::cout << "Pick handle: ";
-                    int choice;
+                    std::size_t choice;
                     std::cin >> choice;
                     std::cout << "Chosen: ";
                     ShowHandleName( WindowHandles[choice] );
@@ -1353,7 +1368,8 @@ namespace EW
             if( ClientToScreen( Handle, &ClientPoint ) )
             {
                 mouse_event( MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP,
-                             ClientPoint.x * 65535 / ScreenWidth, ClientPoint.y * 65535 / ScreenHeight, 0, 0 );
+                             Unsigned( ClientPoint.x * 65535 / ScreenWidth ),  //
+                             Unsigned( ClientPoint.y * 65535 / ScreenHeight ), 0, 0 );
                 Sleep( 100 );
 
                 SendMessage( Handle, WM_RBUTTONDOWN, 0, 0 );
@@ -1379,9 +1395,6 @@ namespace EW
 
         inline void Click( POINT Point, unsigned Repeat = 1 ) const
         {
-#ifdef SHOWACTION
-            std::cout << "[ Click (" << Point.x << ", " << Point.y << ") ]" << std::endl;
-#endif
             while( Repeat-- )
             {
                 MouseLeftDown( Point );
@@ -1392,39 +1405,32 @@ namespace EW
         }
         inline void Click( int x, int y, unsigned Repeat = 1 ) const { Click( POINT{ x, y }, Repeat ); }
 
-        inline void Drag( POINT POINT_1, POINT POINT_2, bool SmoothDrag = true ) const
+        inline void Drag( POINT FROM, POINT TO, bool SmoothDrag = true ) const
         {
-#ifdef SHOWACTION
-            std::cout << "[ Drag (" << POINT_1.x << ", " << POINT_1.y << ")"
-                      << "    To (" << POINT_2.x << ", " << POINT_2.y << ") ]" << std::endl;
-#endif
-
-            MouseLeftDown( POINT_1 );
+            MouseLeftDown( FROM );
             Sleep( ClickDelay );
 
             if( SmoothDrag )
             {
-                constexpr auto Displacement = 8;
+                constexpr auto IndividualDisplacement = 8;
 
-                auto IntervalCount = std::max( std::abs( ( POINT_2.x - POINT_1.x ) / Displacement ),  //
-                                               std::abs( ( POINT_2.y - POINT_1.y ) / Displacement ) );
-                auto Interval = SIZE{ ( POINT_2.x - POINT_1.x ) / IntervalCount,  //
-                                      ( POINT_2.y - POINT_1.y ) / IntervalCount };
+                auto DeltaX = Delta( FROM.x, TO.x );
+                auto DeltaY = Delta( FROM.y, TO.y );
 
-                auto CurrentPoint = POINT_1;
-                for( auto i = 0; i < IntervalCount; ++i )
+                auto IntervalCount = static_cast<decltype( POINT::x )>(  //
+                    std::max( ABS( DeltaX ), ABS( DeltaY ) ) / IndividualDisplacement );
+
+                auto Step = SIZE{ DeltaX / IntervalCount, DeltaY / IntervalCount };
+
+                while( --IntervalCount )
                 {
-                    MouseLeftMove( CurrentPoint );
-                    CurrentPoint += Interval;
-#ifdef SHOWACTION
-                    std::cout << "    To (" << CurrentPoint.x << ", " << CurrentPoint.y << ")" << std::endl;
-#endif
+                    MouseLeftMove( FROM += Step );
                     Sleep( 10 );
                 }
             }
-            MouseLeftMove( POINT_2 );
+            MouseLeftMove( TO );
             Sleep( ClickDelay );
-            MouseLeftUp( POINT_2 );
+            MouseLeftUp( TO );
         }
 
         EasyBitMap CaptureRegion( POINT Origin, SIZE Dimension ) const
@@ -1439,7 +1445,7 @@ namespace EW
             auto [w, h] = Dimension;
             BitBlt( VirtualDC.Destination, 0, 0, w, h, VirtualDC.Source, x, y, SRCCOPY );
 
-            GetDIBits( VirtualDC.Destination, VirtualDC.BitMap, 0, h,  //
+            GetDIBits( VirtualDC.Destination, VirtualDC.BitMap, 0, ABS( h ),  //
                        BitMap.Pixels.data(), &BitMap.BitMapInformation, DIB_RGB_COLORS );
 
             return BitMap;
@@ -1456,8 +1462,8 @@ namespace EW
             auto [w, h] = ReferenceBitMap.Dimension;
             BitBlt( VirtualDC.Destination, 0, 0, w, h, VirtualDC.Source, x, y, SRCCOPY );
 
-            for( auto pos{ 0 }, j{ 0 }; j < h; ++j )
-                for( auto i{ 0 }; i < w; ++i, ++pos )
+            for( auto pos{ 0uz }, j{ 0uz }; j < h; ++j )
+                for( auto i{ 0uz }; i < w; ++i, ++pos )
                 {
                     if( ReferenceBitMap.Pixels[pos].rgbReserved == IGNORE_PIXEL ) continue;
 
