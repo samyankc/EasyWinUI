@@ -894,12 +894,18 @@ namespace EW
 
     constexpr auto nMaxCount = 256uz;
 
-    struct EasyHandleWrapper
+    struct EasyHandle
     {
-        HWND Handle = nullptr;
+        HWND Handle;
+
+        EasyHandle() = default;
+        EasyHandle( const EasyHandle& ) = default;
+        EasyHandle( HWND Src ) : Handle{ Src } {}
+
+        operator HWND() const noexcept { return Handle; }
 
         template<auto GetNameText, auto GetNameLength>
-        auto GetName_impl() noexcept
+        auto GetName_impl() const noexcept
         {
             using StringType = std::string;
             using BufferType = StringType::pointer;
@@ -912,45 +918,58 @@ namespace EW
             return ResultString;
         }
 
-        auto Name() noexcept { return GetName_impl<GetWindowText, GetWindowTextLength>(); }
-        auto ClassName() noexcept { return GetName_impl<GetClassName, AlwaysReturn<256>>(); }
-        auto ShowName() noexcept
+        auto Name() const noexcept { return GetName_impl<GetWindowText, GetWindowTextLength>(); }
+        auto ClassName() const noexcept { return GetName_impl<GetClassName, AlwaysReturn<256>>(); }
+        auto ShowName() const noexcept
         {
             std::cout << std::left << std::setw( 13 ) << std::hex                    //
                       << std::showbase << ( Handle ) << std::dec << std::setw( 32 )  //
                       << "[ " << ClassName() << " ] [ " << Name() << " ] \n";
         }
+
+        auto ShowAllChild() const noexcept
+        {
+            EnumChildWindows( Handle,
+                              []( HWND ChildHandle, LPARAM ) -> WINBOOL {
+                                  std::cout << "\\ ";
+                                  EasyHandle{ ChildHandle }.ShowName();
+                                  return true;
+                              },
+                              {} );
+        }
+
+        auto ChildHandles() const noexcept
+        {
+            std::vector<EasyHandle> Handles;
+
+            auto ChildCount = 0uz;
+
+            EnumChildWindows(
+                Handle,
+                []( HWND, LPARAM lParam_ ) -> WINBOOL {
+                    ++*reinterpret_cast<std::size_t*>( lParam_ );
+                    return true;
+                },
+                reinterpret_cast<LPARAM>( &ChildCount ) );
+
+            Handles.reserve( ChildCount );
+
+            EnumChildWindows(
+                Handle,
+                []( HWND Handle, LPARAM lParam_ ) -> WINBOOL {
+                    reinterpret_cast<std::vector<EasyHandle>*>( lParam_ )->emplace_back( Handle );
+                    return true;
+                },
+                reinterpret_cast<LPARAM>( &Handles ) );
+
+            return Handles;
+        }
     };
 
-    inline auto ShowHandleName( HWND Handle )
+    inline auto ObtainFocusHandle( Clock::duration Delay = 2s )
     {
-        char TextBuffer[nMaxCount];
-
-        std::cout << std::left << std::setw( 13 )  //
-                  << std::hex << std::showbase << ( Handle ) << std::dec;
-
-        GetClassName( Handle, TextBuffer, nMaxCount );
-        std::cout << std::setw( 32 ) << "[ " << TextBuffer << " ]" << ' ';
-
-        GetWindowText( Handle, TextBuffer, nMaxCount );
-        std::cout << "[ " << TextBuffer << " ] \n";
-    }
-
-    inline void ShowAllChild( HWND Handle )
-    {
-        EnumChildWindows( Handle,
-                          []( HWND ChildHandle, LPARAM ) -> WINBOOL {
-                              std::cout << "\\ ";
-                              ShowHandleName( ChildHandle );
-                              return true;
-                          },
-                          {} );
-    }
-
-    inline HWND ObtainFocusHandle( DWORD Delay = 2000 )
-    {
-        Sleep( Delay );
-        if( HWND ret = GetFocus(); ret ) return ret;
+        sleep_for( Delay );
+        if( auto ret = GetFocus(); ret ) return ret;
         return GetForegroundWindow();
     }
 
@@ -960,61 +979,26 @@ namespace EW
         return static_cast<WPARAM>( ch );
     }
 
-    inline auto GetWindowHandleAll( HWND ParentHandle = nullptr )
-    {
-        std::vector<HWND> Handles;
-        Handles.reserve( 256 );
+    inline auto GetAllWindowHandles() { return EasyHandle{}.ChildHandles(); }
 
-        EnumChildWindows(
-            ParentHandle,
-            []( HWND Handle, LPARAM lParam_ ) -> WINBOOL {
-                reinterpret_cast<std::vector<HWND>*>( lParam_ )->push_back( Handle );
-                return true;
-            },
-            reinterpret_cast<LPARAM>( &Handles ) );
+    inline auto GetWindowHandlesByName( std::string_view Name )
+    {
+        auto Handles = GetAllWindowHandles();
+
+        std::erase_if( Handles, [=]( EasyHandle Handle ) {
+            return ! Handle.Name().contains( Name ) &&  //
+                   ! Handle.ClassName().contains( Name );
+        } );
 
         return Handles;
-    }
-
-    inline auto GetWindowHandleByName( std::string_view Name )
-    {
-        auto Handles = GetWindowHandleAll();
-        auto NotFoundBy = [=]( auto... NameExtractors ) {
-            return [=]( HWND Handle ) {
-                auto FoundBy = [=]( auto NameExtractor ) {
-                    char TextBuffer[nMaxCount];
-                    NameExtractor( Handle, TextBuffer, nMaxCount );
-                    return std::string_view( TextBuffer ).contains( Name );
-                };
-                return ! ( FoundBy( NameExtractors ) || ... );
-            };
-        };
-        std::erase_if( Handles, NotFoundBy( GetClassName, GetWindowText ) );
-        return Handles;
-    }
-
-    inline auto GetWindowHandleByName_( std::string_view Name )
-    {
-        auto Handles = GetWindowHandleAll();
-        auto Results = decltype( Handles ){};
-        std::ranges::copy_if( Handles, std::back_inserter( Results ),  //
-                              [=]( HWND Handle ) {
-                                  auto FoundBy = [=]( auto NameExtractor ) {
-                                      char TextBuffer[nMaxCount];
-                                      NameExtractor( Handle, TextBuffer, nMaxCount );
-                                      return std::string_view( TextBuffer ).contains( Name );
-                                  };
-                                  return FoundBy( GetClassName ) || FoundBy( GetWindowText );
-                              } );
-        return Results;
     }
 
     inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
-        constexpr auto Span = []( auto& S ) { return std::span( reinterpret_cast<const BYTE( & )[4]>( S ) ); };
+        constexpr auto Span = []( auto& S ) { return std::span( reinterpret_cast<const BYTE( & )[3]>( S ) ); };
         return [=]( auto... i ) {
             return ( ( ABS( Span( LHS )[i] - Span( RHS )[i] ) <= SimilarityThreshold ) & ... );
-        }( 1u, 2u, 3u );
+        }( 0u, 1u, 2u );
     }
 
     constexpr auto operator+( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x + RHS.x, LHS.y + RHS.y }; }
@@ -1248,107 +1232,96 @@ namespace EW
 
     struct EasyControl
     {
-        HWND Handle;
-        DWORD ClickDuration{ 30 };
-        DWORD ClickDelay{ 120 };
-        DWORD KeyDuration{ 20 };
-        DWORD KeyDelay{ 80 };
+        EasyHandle Handle;
+        Clock::duration ClickDuration{ 30ms };
+        Clock::duration ClickDelay{ 120ms };
+        Clock::duration KeyDuration{ 20ms };
+        Clock::duration KeyDelay{ 80ms };
 
-        EasyControl() : Handle( NULL ) {}
+        EasyControl() : Handle( nullptr ) {}
 
-        EasyControl( HWND _hwnd ) : Handle( _hwnd ) {}
+        EasyControl( EasyHandle _hwnd ) : Handle( _hwnd ) {}
 
         EasyControl( const EasyControl& _Control ) = default;
 
         EasyControl( std::string_view WindowName, std::string_view ControlName )
         {
-            auto WindowHandles = GetWindowHandleByName( WindowName );
-
-#ifdef SHOWNAME
-            for( auto& W : WindowHandles )
-            {
-                ShowHandleName( W );
-                ShowAllChild( W );
-                std::cout << '\n';
-            }
-#endif
+            auto WindowHandles = GetWindowHandlesByName( WindowName );
 
             switch( WindowHandles.size() )
             {
-                case 0 : Handle = NULL; return;
+                case 0 : Handle = nullptr; return;
                 case 1 :
-                    Handle = FindWindowEx( WindowHandles[0], NULL, ControlName.data(), NULL );
-                    if( Handle == NULL ) Handle = WindowHandles[0];
+                    Handle = FindWindowEx( WindowHandles[0], nullptr, ControlName.data(), nullptr );
+                    if( Handle == nullptr ) Handle = WindowHandles[0];
                     break;
                 default :
                 {
-                    for( std::size_t i = 0; i < WindowHandles.size(); ++i )
+                    for( auto i{ 0 }; auto H : WindowHandles )
                     {
-                        std::cout << "[" << i << "] ";
-                        ShowHandleName( WindowHandles[i] );
+                        std::cout << "[" << i++ << "] ";
+                        H.ShowName();
                     }
                     std::cout << "Pick handle: ";
                     std::size_t choice;
                     std::cin >> choice;
                     std::cout << "Chosen: ";
-                    ShowHandleName( WindowHandles[choice] );
-                    Handle = FindWindowEx( WindowHandles[choice], NULL, ControlName.data(), NULL );
+                    WindowHandles[choice].ShowName();
+                    Handle = FindWindowEx( WindowHandles[choice], nullptr, ControlName.data(), nullptr );
                     break;
                 }
             }
         }
 
-        operator HWND() const { return Handle; }
+        operator HWND() const noexcept { return Handle; }
 
         auto empty() const noexcept { return Handle == NULL; }
 
-        inline void SendKey( WPARAM VirtualKey, LPARAM HardwareScanCode = 1 )
+        auto SendKey( WPARAM VirtualKey, LPARAM HardwareScanCode = 1 )
         {
             SendMessage( Handle, WM_KEYDOWN, VirtualKey, HardwareScanCode );
-            Sleep( KeyDuration );
+            sleep_for( KeyDuration );
             SendMessage( Handle, WM_KEYUP, VirtualKey, HardwareScanCode );
-            Sleep( KeyDelay );
+            sleep_for( KeyDelay );
         }
 
-        inline void SendChar( WPARAM CharacterCode )
+        auto SendChar( WPARAM CharacterCode )
         {
             SendMessage( Handle, WM_CHAR, CharacterCode, 0 );
-            Sleep( KeyDelay );
+            sleep_for( KeyDelay );
         }
 
-        inline void SendText( const char* Text )
+        auto SendText( std::string_view Text )
         {
-            SendMessage( Handle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( Text ) );
+            return SendMessage( Handle, WM_SETTEXT, 0, reinterpret_cast<LPARAM>( Text.data() ) );
         }
 
-        SIZE GetClientDimension()
+        auto GetClientDimension() -> SIZE
         {
             RECT ClientRect;
             GetClientRect( Handle, &ClientRect );
             return { ClientRect.right, ClientRect.bottom };
         }
 
-        void TranslatePOINT( POINT& Origin )
-        {
-            static const auto ClientWidth = GetClientDimension().cx;
-            static const auto ClientHeight = GetClientDimension().cy;
-            if( Origin.x >= 0 && Origin.y >= 0 ) return;
+        // what is the use of this??
+        // auto TranslatePOINT( POINT& Origin )
+        // {
+        //     static const auto [ClientWidth, ClientHeight] = GetClientDimension();
+        //     if( Origin.x >= 0 && Origin.y >= 0 ) return;
+        //     Origin = POINT{ Origin.x + ( Origin.x < 0 ) * ClientWidth, Origin.y + ( Origin.y < 0 ) * ClientHeight };
+        // }
 
-            Origin = POINT{ Origin.x + ( Origin.x < 0 ) * ClientWidth, Origin.y + ( Origin.y < 0 ) * ClientHeight };
-        }
-
-        POINT TranslatePOINT( POINT&& Origin )
-        {
-            TranslatePOINT( Origin );
-            return Origin;
-        }
+        // auto TranslatePOINT( POINT&& Origin ) -> POINT
+        // {
+        //     TranslatePOINT( Origin );
+        //     return Origin;
+        // }
 
         void SendMouseInput( double PercentX, double PercentY )
         {
             static const auto ScreenWidth = GetSystemMetrics( SM_CXSCREEN );
             static const auto ScreenHeight = GetSystemMetrics( SM_CYSCREEN );
-            static const auto ClientWidth = GetClientDimension().cx;
-            static const auto ClientHeight = GetClientDimension().cy;
+            static const auto [ClientWidth, ClientHeight] = GetClientDimension();
             // thread safe initialisation may cause performance issue
             // need modification
 
@@ -1358,12 +1331,12 @@ namespace EW
                 mouse_event( MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP,
                              Unsigned( ClientPoint.x * 65535 / ScreenWidth ),  //
                              Unsigned( ClientPoint.y * 65535 / ScreenHeight ), 0, 0 );
-                Sleep( 100 );
+                sleep_for( 100ms );
 
                 SendMessage( Handle, WM_RBUTTONDOWN, 0, 0 );
-                Sleep( ClickDuration );
+                sleep_for( ClickDuration );
                 SendMessage( Handle, WM_RBUTTONUP, 0, 0 );
-                Sleep( ClickDelay );
+                sleep_for( ClickDelay );
 
                 // Click(0);
             }
@@ -1373,30 +1346,30 @@ namespace EW
                           << " full height ) failed.\n";
         }
 
-        inline auto MouseLeftEvent( UINT Msg, POINT Point ) const
+        auto MouseLeftEvent( UINT Msg, POINT Point ) const
         {
             return SendMessage( Handle, Msg, MK_LBUTTON, MAKELPARAM( Point.x, Point.y ) );
         }
-        inline auto MouseLeftDown( POINT Point ) const { return MouseLeftEvent( WM_LBUTTONDOWN, Point ); }
-        inline auto MouseLeftMove( POINT Point ) const { return MouseLeftEvent( WM_MOUSEMOVE, Point ); }
-        inline auto MouseLeftUp( POINT Point ) const { return MouseLeftEvent( WM_LBUTTONUP, Point ); }
+        auto MouseLeftDown( POINT Point ) const { return MouseLeftEvent( WM_LBUTTONDOWN, Point ); }
+        auto MouseLeftMove( POINT Point ) const { return MouseLeftEvent( WM_MOUSEMOVE, Point ); }
+        auto MouseLeftUp( POINT Point ) const { return MouseLeftEvent( WM_LBUTTONUP, Point ); }
 
-        inline void Click( POINT Point, unsigned Repeat = 1 ) const
+        void Click( POINT Point, auto Repeat = 1 ) const
         {
             while( Repeat-- )
             {
                 MouseLeftDown( Point );
-                Sleep( ClickDuration );
+                sleep_for( ClickDuration );
                 MouseLeftUp( Point );
-                Sleep( ClickDelay );
+                sleep_for( ClickDelay );
             }
         }
-        inline void Click( int x, int y, unsigned Repeat = 1 ) const { Click( POINT{ x, y }, Repeat ); }
+        void Click( int x, int y, auto Repeat = 1 ) const { Click( POINT{ x, y }, Repeat ); }
 
-        inline void Drag( POINT FROM, POINT TO, bool SmoothDrag = true ) const
+        void Drag( POINT FROM, POINT TO, bool SmoothDrag = true ) const
         {
             MouseLeftDown( FROM );
-            Sleep( ClickDelay );
+            sleep_for( ClickDelay );
 
             if( SmoothDrag )
             {
@@ -1405,7 +1378,7 @@ namespace EW
                 auto DeltaX = Delta( FROM.x, TO.x );
                 auto DeltaY = Delta( FROM.y, TO.y );
 
-                auto IntervalCount = static_cast<decltype( POINT::x )>(  //
+                auto IntervalCount = static_cast<decltype( DeltaX )>(  //
                     std::max( ABS( DeltaX ), ABS( DeltaY ) ) / IndividualDisplacement );
 
                 auto Step = SIZE{ DeltaX / IntervalCount, DeltaY / IntervalCount };
@@ -1413,15 +1386,15 @@ namespace EW
                 while( --IntervalCount )
                 {
                     MouseLeftMove( FROM += Step );
-                    Sleep( 10 );
+                    sleep_for( 10ms );
                 }
             }
             MouseLeftMove( TO );
-            Sleep( ClickDelay );
+            sleep_for( ClickDelay );
             MouseLeftUp( TO );
         }
 
-        EasyBitMap CaptureRegion( POINT Origin, SIZE Dimension ) const
+        auto CaptureRegion( POINT Origin, SIZE Dimension ) const -> EasyBitMap
         {
             auto BitMap = EasyBitMap( Origin, Dimension );
 
