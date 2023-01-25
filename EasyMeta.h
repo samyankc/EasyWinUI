@@ -29,6 +29,16 @@ namespace EasyMeta
     template<typename TargetType, typename... CandidateTypes>
     concept MatchType = MatchExactType<std::decay_t<TargetType>, std::decay_t<CandidateTypes>...>;
 
+    template<typename T, T V>
+    struct integral_constant_extension : std::integral_constant<T, V>
+    {
+        constexpr operator T() const noexcept { return V; }
+        constexpr auto operator()( const auto&... ) const noexcept { return *this; }
+    };
+
+    template<auto V>
+    constexpr auto AlwaysReturn = integral_constant_extension<decltype( V ), V>{};
+
     template<std::size_t N, typename CharT>
     struct FixedString
     {

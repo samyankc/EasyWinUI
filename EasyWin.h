@@ -40,17 +40,21 @@
 //#define EVENT_PARAMETER_LIST HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 using namespace EasyMeta;
-using namespace std::chrono_literals;
 
 // helpers
 namespace
 {
     constexpr inline auto SIMILARITY_THRESHOLD = 30;
 
-    template<std::integral IntegerType>
-    constexpr auto Unsigned( IntegerType N ) noexcept
+    // template<std::integral IntegerType>
+    // constexpr auto Unsigned( IntegerType N ) noexcept
+    // {
+    //     return static_cast<std::make_unsigned_t<IntegerType>>( N );
+    // }
+
+    constexpr auto Unsigned( auto N ) noexcept requires std::integral<decltype( N + 0 )>
     {
-        return static_cast<std::make_unsigned_t<IntegerType>>( N );
+        return static_cast<std::make_unsigned_t<decltype( N + 0 )>>( N );
     }
 
     template<std::integral IntegerType>
@@ -84,9 +88,12 @@ namespace
 namespace EW
 {
     int Main();
+    using namespace std::this_thread;
+    using namespace std::chrono_literals;
 
     using Clock = std::chrono::high_resolution_clock;
-    template<std::invocable Callable, typename ThreadProvider = std::thread>
+
+    template<typename ThreadModel = std::jthread, std::invocable Callable>
     [[nodiscard]] auto Debounce( Clock::duration DebounceAmplitude, Callable&& Action )
     {
         struct DebounceAction
@@ -107,7 +114,7 @@ namespace EW
             {
                 if( ScheduledInvokeTime.exchange( Clock::now() + DebounceAmplitude ) == Clock::time_point{} )
                 {
-                    ThreadProvider( [&] {
+                    ThreadModel( [&] {
                         while( true )
                         {
                             std::this_thread::sleep_until( ScheduledInvokeTime.load() );
@@ -879,11 +886,41 @@ namespace EW
         return std::forward<T>( LHS );
     }
 
+    // EasyWin Control
+
     constexpr auto IGNORE_PIXEL = decltype( RGBQUAD::rgbReserved ){ 1 };
     constexpr auto REJECT_COLOUR = decltype( RGBQUAD::rgbReserved ){ 2 };
     constexpr auto IGNORE_TEXT = "_WwWwWwW_";
 
     constexpr auto nMaxCount = 256uz;
+
+    struct EasyHandleWrapper
+    {
+        HWND Handle = nullptr;
+
+        template<auto GetNameText, auto GetNameLength>
+        auto GetName_impl() noexcept
+        {
+            using StringType = std::string;
+            using BufferType = StringType::pointer;
+            using SizeType = decltype( GetNameLength( nullptr ) + 0 );
+            StringType ResultString;
+            ResultString.resize_and_overwrite( Unsigned( GetNameLength( Handle ) ),
+                                               [Handle = Handle]( BufferType Buffer, SizeType BufferSize ) {
+                                                   return GetNameText( Handle, Buffer, BufferSize + 1 );
+                                               } );
+            return ResultString;
+        }
+
+        auto Name() noexcept { return GetName_impl<GetWindowText, GetWindowTextLength>(); }
+        auto ClassName() noexcept { return GetName_impl<GetClassName, AlwaysReturn<256>>(); }
+        auto ShowName() noexcept
+        {
+            std::cout << std::left << std::setw( 13 ) << std::hex                    //
+                      << std::showbase << ( Handle ) << std::dec << std::setw( 32 )  //
+                      << "[ " << ClassName() << " ] [ " << Name() << " ] \n";
+        }
+    };
 
     inline auto ShowHandleName( HWND Handle )
     {
@@ -893,7 +930,7 @@ namespace EW
                   << std::hex << std::showbase << ( Handle ) << std::dec;
 
         GetClassName( Handle, TextBuffer, nMaxCount );
-        std::cout << std::setw( 32 ) << std::string( "[ " ) + TextBuffer + " ]" << ' ';
+        std::cout << std::setw( 32 ) << "[ " << TextBuffer << " ]" << ' ';
 
         GetWindowText( Handle, TextBuffer, nMaxCount );
         std::cout << "[ " << TextBuffer << " ] \n";
@@ -970,24 +1007,6 @@ namespace EW
                                   return FoundBy( GetClassName ) || FoundBy( GetWindowText );
                               } );
         return Results;
-    }
-
-    inline auto NameOfHandle( HWND Handle )
-    {
-        std::string ResultString;
-        ResultString.resize_and_overwrite( ABS( GetWindowTextLength( Handle ) ),
-                                           [Handle = Handle]( auto Buffer, auto BufferSize ) {
-                                               return GetWindowText( Handle, Buffer, BufferSize + 1 );
-                                           } );
-        return ResultString;
-    }
-
-    inline auto ClassNameOfHandle( HWND Handle )
-    {
-        std::string ResultString;
-        ResultString.resize_and_overwrite( 256uz, std::bind_front( GetWindowText, Handle ) );
-        //ResultString.resize_and_overwrite( 256uz, std::bind_front( GetClassName, Handle ) ); // ?
-        return ResultString;
     }
 
     inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
@@ -1201,37 +1220,6 @@ namespace EW
             return OSS.str();
         }
     };
-
-    //#define AcquireFocus(_Handle_) AcquireFocus_ TemporaryFocus(_Handle_); auto dummy:{0}
-    // #define AcquireFocus( _Handle_ )                         \
-//     struct                                               \
-//     {                                                    \
-//         const AcquireFocus_& _Dummy_;                    \
-//         bool                 _InLoop_;                   \
-//     } TemporaryFocus{ AcquireFocus_{ _Handle_ }, true }; \
-//     TemporaryFocus._InLoop_;                             \
-//     TemporaryFocus._InLoop_ = false
-
-    // struct AcquireFocus_
-    // {
-    //     HWND LastForegroundWindow;
-
-    //     inline void BringToForeground( HWND Handle )
-    //     {
-    //         SendMessage( Handle, WM_ACTIVATE, WA_CLICKACTIVE, 0 );
-    //         SetForegroundWindow( Handle );
-    //         // SwitchToThisWindow(Handle,true);
-    //         // Sleep(100);
-    //     }
-
-    //     AcquireFocus_( HWND Handle )
-    //     {
-    //         LastForegroundWindow = GetForegroundWindow();
-    //         BringToForeground( Handle );
-    //     }
-
-    //     ~AcquireFocus_() { BringToForeground( LastForegroundWindow ); }
-    // };
 
     struct VirtualDeviceContext
     {
@@ -1487,7 +1475,6 @@ namespace EW
         inline RGBQUAD GetColour( LONG x, LONG y ) { return GetColour( { x, y } ); }
 
         void Run( void ( *Proc )( EasyControl& ) ) { Proc( *this ); }
-        //#define Run(Proc) Run( (void (*)(CreateControl&)) Proc )
     };
 
 }  // namespace EW
