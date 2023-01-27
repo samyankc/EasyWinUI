@@ -904,7 +904,7 @@ namespace EW
 
         operator HWND() const noexcept { return Handle; }
 
-        template<auto GetNameText, auto GetNameLength>
+        template<std::invocable<HWND , LPSTR , int> auto GetNameText, std::invocable<HWND > auto GetNameLength>
         auto GetName_impl() const noexcept
         {
             using StringType = std::string;
@@ -991,6 +991,7 @@ namespace EW
         } );
 
         return Handles;
+
     }
 
     inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
