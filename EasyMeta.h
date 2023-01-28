@@ -35,18 +35,19 @@ namespace EasyMeta
         template<typename R, typename... Args>
         constexpr static R PointerDecay( Args... ) noexcept
         {
-            return V;
+            return static_cast<R>( V );
         }
 
-        template<typename R = T, typename... Args,  //
-                 typename FunctionPointer = R ( * )( Args... )>
+        template<typename R = T, typename... Args, typename FunctionPointer = R ( * )( Args... )>
         constexpr operator FunctionPointer() const noexcept
         {
             return static_cast<FunctionPointer>( PointerDecay );
         }
 
+        //using std::integral_constant<T, V>::operator T;
         constexpr operator T() const noexcept { return V; }
-        constexpr auto operator()( const auto&... ) const noexcept { return V; }
+        constexpr friend auto operator+( const integral_constant_extension&, const auto& Other ) { return V + Other; }
+        constexpr auto operator()( const auto&... ) const noexcept { return *this; }
     };
 
     template<auto V>
