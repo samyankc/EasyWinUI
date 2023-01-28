@@ -32,16 +32,17 @@ namespace EasyMeta
     template<typename T, T V>
     struct integral_constant_extension : std::integral_constant<T, V>
     {
-        template<typename... Args>
-        constexpr static auto PointerDecay( Args... ) noexcept
+        template<typename R, typename... Args>
+        constexpr static R PointerDecay( Args... ) noexcept
         {
             return V;
         }
 
-        template<typename... Args, typename Signature = T ( * )( Args... )>
-        constexpr operator Signature() const noexcept
+        template<typename R = T, typename... Args,  //
+                 typename FunctionPointer = R ( * )( Args... )>
+        constexpr operator FunctionPointer() const noexcept
         {
-            return static_cast<Signature>( PointerDecay );
+            return static_cast<FunctionPointer>( PointerDecay );
         }
 
         constexpr operator T() const noexcept { return V; }
