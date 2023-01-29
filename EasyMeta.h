@@ -57,6 +57,12 @@ namespace EasyMeta
     template<auto V>
     constexpr auto AlwaysReturn = integral_constant_extension<decltype( V ), V>{};
 
+    template<std::size_t... Is>
+    consteval auto ForConstexpr( std::invocable auto&& F )
+    {
+        ( std::move( F )( Is ), ... );
+    }
+
     template<std::size_t N, typename CharT>
     struct FixedString
     {

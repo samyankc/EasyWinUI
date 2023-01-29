@@ -1,6 +1,7 @@
 #include <EasyMeta.h>
 #include <EasyTest.h>
 
+
 using namespace EasyMeta;
 using namespace boost::ut;
 
@@ -17,20 +18,17 @@ auto Consume_FuncPtr2( FuncPtr2 F ) { return F( {}, {}, {} ); }
 
 template<std::integral T>
 constexpr auto IntegralValueSamples =
-    std::array<T, 9>{ 0, 1, 2, -1, -2, MaxOf<T> / 2, MaxOf<T>, MinOf<T> / 2, MinOf<T> };
+    std::integer_sequence<T, 0, 1, 2, -1, -2, MaxOf<T> / 2, MaxOf<T>, MinOf<T> / 2, MinOf<T>>{};
 
 int main()
 {
-    "Invoke to be identity"_test = [] {
-        for( auto N : IntegralValueSamples<int> )
+    "Invoke to be identity"_test = []<class TestType> {
+        constexpr auto _ = []<TestType... Samples>( std::integer_sequence<TestType, Samples...> )
         {
-            test( "Invoke with " + std::to_string( N ) ) = [N] {
-                expect( AlwaysReturn<N - 1>() == _t( N - 1 ) );
-                expect( AlwaysReturn<N + 0>() == _t( N + 0 ) );
-                expect( AlwaysReturn<N + 1>() == _t( N + 1 ) );
-            };
+            ( expect( AlwaysReturn<Samples>() == _t( Samples ) ), ... );
         }
-    };
+        ( IntegralValueSamples<TestType> );
+    } | std::tuple<int, long long, unsigned char>{};
 
     "Template Consume"_test = [] { expect( Consume( AlwaysReturn<123> ) == 123 ); };
 
