@@ -32,6 +32,6 @@
 *.app
 
 # Folders
-.vscode/
+.ignore/
 .build/
 .DS_Store
