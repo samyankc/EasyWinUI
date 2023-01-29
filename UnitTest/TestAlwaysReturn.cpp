@@ -1,7 +1,6 @@
 #include <EasyMeta.h>
 #include <EasyTest.h>
 
-
 using namespace EasyMeta;
 using namespace boost::ut;
 
@@ -23,7 +22,7 @@ constexpr auto IntegralValueSamples =
 int main()
 {
     "Invoke to be identity"_test = []<class TestType> {
-        constexpr auto _ = []<TestType... Samples>( std::integer_sequence<TestType, Samples...> )
+        []<TestType... Samples>( std::integer_sequence<TestType, Samples...> )
         {
             ( expect( AlwaysReturn<Samples>() == _t( Samples ) ), ... );
         }
