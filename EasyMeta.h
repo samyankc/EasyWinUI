@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <string_view>
 #include <array>
+#include <limits>
 
 namespace EasyMeta
 {
@@ -28,6 +29,12 @@ namespace EasyMeta
 
     template<typename TargetType, typename... CandidateTypes>
     concept MatchType = MatchExactType<std::decay_t<TargetType>, std::decay_t<CandidateTypes>...>;
+
+    template<std::integral T>
+    constexpr auto MaxOf = std::numeric_limits<T>::max();
+
+    template<std::integral T>
+    constexpr auto MinOf = std::numeric_limits<T>::min();
 
     template<typename T, T V>
     struct integral_constant_extension : std::integral_constant<T, V>
