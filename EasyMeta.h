@@ -44,10 +44,7 @@ namespace EasyMeta
             return static_cast<FunctionPointer>( PointerDecay );
         }
 
-        //using std::integral_constant<T, V>::operator T;
-        constexpr operator T() const noexcept { return V; }
-        constexpr friend auto operator+( const integral_constant_extension&, const T& Other ) { return V + Other; }
-        constexpr auto operator()( const auto&... ) const noexcept { return *this; }
+        constexpr auto operator()( ... ) const noexcept { return V; }
     };
 
     template<auto V>

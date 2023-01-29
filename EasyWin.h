@@ -46,21 +46,18 @@ namespace
 {
     constexpr inline auto SIMILARITY_THRESHOLD = 30;
 
-    // template<std::integral IntegerType>
-    // constexpr auto Unsigned( IntegerType N ) noexcept
+    // constexpr auto Unsigned( auto N ) noexcept requires std::integral<decltype( N + 0 )>
     // {
-    //     return static_cast<std::make_unsigned_t<IntegerType>>( N );
+    //     return static_cast<std::make_unsigned_t<decltype( N + 0 )>>( N + 0 );
     // }
 
-    constexpr auto Unsigned( auto N ) noexcept requires std::integral<decltype( N + 0 )>
+    constexpr auto Unsigned( std::integral auto N ) noexcept
     {
-        return static_cast<std::make_unsigned_t<decltype( N + 0 )>>( N + 0 );
+        return static_cast<std::make_unsigned_t<decltype( N )>>( N );
     }
 
-    template<std::integral IntegerType>
-    constexpr auto ABS( IntegerType N ) noexcept
+    constexpr auto ABS( std::integral auto N ) noexcept
     {
-        //using Unsigned = std::make_unsigned_t<IntegerType>;
         if( N > 0 )
             return Unsigned( N );
         else
@@ -909,7 +906,7 @@ namespace EW
         {
             using StringType = std::string;
             using BufferType = StringType::pointer;
-            using SizeType = decltype( GetNameLength( nullptr ) + 0 );
+            using SizeType = decltype( GetNameLength( nullptr ) );
             StringType ResultString;
             ResultString.resize_and_overwrite( Unsigned( GetNameLength( Handle ) ),
                                                [Handle = Handle]( BufferType Buffer, SizeType BufferSize ) {
