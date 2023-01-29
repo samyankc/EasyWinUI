@@ -46,7 +46,7 @@ namespace EasyMeta
 
         //using std::integral_constant<T, V>::operator T;
         constexpr operator T() const noexcept { return V; }
-        constexpr friend auto operator+( const integral_constant_extension&, const auto& Other ) { return V + Other; }
+        constexpr friend auto operator+( const integral_constant_extension&, const T& Other ) { return V + Other; }
         constexpr auto operator()( const auto&... ) const noexcept { return *this; }
     };
 
