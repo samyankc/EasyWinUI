@@ -32,7 +32,7 @@ int main()
         ConstexprForEachType<char, short, int, long long,                         //
                              unsigned char, unsigned short,                       //
                              unsigned int, unsigned long long>( []<typename T> {  //
-            ConstexprUnroll<100>( []<T N> {                                       //
+            ConstexprUnroll<1000>( []<std::size_t N> {                            //
                 constexpr T N_T = static_cast<T>( N );
                 expect( AlwaysReturn<N_T>() == _t( N_T ) );
             } );
