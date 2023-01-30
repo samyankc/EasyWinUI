@@ -2,10 +2,11 @@
 #define EASYMETA_H
 
 #include <algorithm>
-#include <type_traits>
-#include <string_view>
 #include <array>
 #include <limits>
+#include <string_view>
+#include <type_traits>
+#include <concepts>
 
 namespace EasyMeta
 {
@@ -57,10 +58,42 @@ namespace EasyMeta
     template<auto V>
     constexpr auto AlwaysReturn = integral_constant_extension<decltype( V ), V>{};
 
-    template<std::size_t... Is>
-    consteval auto ForConstexpr( std::invocable auto&& F )
+    enum class ConstexprExecutionPolicy { Imediate, Defer, Ignore };
+    using CEP = ConstexprExecutionPolicy;
+
+    using EmptyCallable = decltype( [] {} );
+
+    template<auto... Args, std::invocable Callable>
+    constexpr auto ConstexprForEach( Callable&& F )
     {
-        ( std::move( F )( Is ), ... );
+        auto L = [F = std::forward<Callable>( F )] { ( F( Args ), ... ); };
+        L();
+    }
+
+    template<typename... Ts, typename Callable>
+    requires requires( Callable F ) { ( F.template operator()<Ts>(), ... ); }
+    constexpr auto ConstexprForEachType( Callable&& F )
+    {
+        auto L = [F = std::forward<Callable>( F )] { ( F.template operator()<Ts>(), ... ); };
+        L();
+    }
+
+    template<std::size_t N, ConstexprExecutionPolicy Policy = CEP::Imediate, typename Callable>
+    requires requires( Callable F ) { F.template operator()<N>(); }
+    constexpr auto ConstexprUnroll( Callable&& F )
+    {
+        auto L = [F = std::forward<Callable>( F )] {
+            [&]<std::size_t... Is>( std::index_sequence<Is...> )
+            {  //
+                ( F.template operator()<Is>(), ... );
+            }
+            ( std::make_index_sequence<N>() );
+        };
+
+        if constexpr( Policy == CEP::Defer )
+            return L;
+        else
+            L();
     }
 
     template<std::size_t N, typename CharT>
@@ -69,12 +102,14 @@ namespace EasyMeta
         CharT data[N];
         constexpr FixedString( const CharT ( &Src )[N] ) { std::copy_n( Src, N, data ); }
         constexpr operator std::basic_string_view<CharT>() const noexcept { return { data }; }
-        //constexpr auto sv() const noexcept { return std::basic_string_view{ data }; }
+        // constexpr auto sv() const noexcept { return std::basic_string_view{ data };
+        // }
         constexpr auto operator[]( std::size_t i ) const noexcept { return data[i]; }
         constexpr auto BufferSize() const noexcept { return N; }
     };
 
-    //template<std::size_t N, typename CharT> FixedString( const CharT ( & )[N] ) -> FixedString<N, CharT>;
+    // template<std::size_t N, typename CharT> FixedString( const CharT ( & )[N] )
+    // -> FixedString<N, CharT>;
 
     template<typename NewCharT, FixedString Src>
     consteval auto MakeFixedString()
