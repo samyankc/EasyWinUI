@@ -58,42 +58,28 @@ namespace EasyMeta
     template<auto V>
     constexpr auto AlwaysReturn = integral_constant_extension<decltype( V ), V>{};
 
-    enum class ConstexprExecutionPolicy { Imediate, Defer, Ignore };
-    using CEP = ConstexprExecutionPolicy;
-
-    using EmptyCallable = decltype( [] {} );
-
     template<auto... Args, std::invocable Callable>
     constexpr auto ConstexprForEach( Callable&& F )
     {
-        auto L = [F = std::forward<Callable>( F )] { ( F( Args ), ... ); };
-        L();
+        ( std::forward<Callable>( F )( Args ), ... );
     }
 
     template<typename... Ts, typename Callable>
     requires requires( Callable F ) { ( F.template operator()<Ts>(), ... ); }
     constexpr auto ConstexprForEachType( Callable&& F )
     {
-        auto L = [F = std::forward<Callable>( F )] { ( F.template operator()<Ts>(), ... ); };
-        L();
+        ( std::forward<Callable>( F ).template operator()<Ts>(), ... );
     }
 
-    template<std::size_t N, ConstexprExecutionPolicy Policy = CEP::Imediate, typename Callable>
+    template<std::size_t N, typename Callable>
     requires requires( Callable F ) { F.template operator()<N>(); }
     constexpr auto ConstexprUnroll( Callable&& F )
     {
-        auto L = [F = std::forward<Callable>( F )] {
-            [&]<std::size_t... Is>( std::index_sequence<Is...> )
-            {  //
-                ( F.template operator()<Is>(), ... );
-            }
-            ( std::make_index_sequence<N>() );
-        };
-
-        if constexpr( Policy == CEP::Defer )
-            return L;
-        else
-            L();
+        [&]<std::size_t... Is>( std::index_sequence<Is...> )
+        {  //
+            ( std::forward<Callable>( F ).template operator()<Is>(), ... );
+        }
+        ( std::make_index_sequence<N>() );
     }
 
     template<std::size_t N, typename CharT>

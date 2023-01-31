@@ -15,9 +15,22 @@ auto Consume( GetSizeFunction F )
 auto ConsumeFuncPtr1( FuncPtr1 F ) { return F( {}, {}, {} ); }
 auto ConsumeFuncPtr2( FuncPtr2 F ) { return F( {}, {}, {} ); }
 
+// template<std::integral T>
+// constexpr auto IntegralValueSamples = MakeHomogeneousTuple<T>( 0, 1, 2, -1, -2,             //
+//                                                                MaxOf<T> / 2, MinOf<T> / 2,  //
+//                                                                MaxOf<T>, MinOf<T> );
+
+// template<std::integral T>
+// constexpr auto IntegralValueSamples =
+//     std::initializer_list<T>{ 0, 1, 2, -1, -2, MaxOf<T> / 2, MinOf<T> / 2, MaxOf<T>, MinOf<T> };
+
 template<std::integral T>
-constexpr auto IntegralValueSamples = std::integer_sequence<T, 0, 1, 2, static_cast<T>( -1 ), static_cast<T>( -2 ),
-                                                            MaxOf<T> / 2, MinOf<T> / 2, MaxOf<T>, MinOf<T>>{};
+constexpr auto IntegralValueSamples =
+    IntegralConstantTuple<T, 0, 1, 2, -1, -2, MaxOf<T> / 2, MinOf<T> / 2, MaxOf<T>, MinOf<T>>;
+
+constexpr auto IntegralTypeSamples = std::tuple<char, short, int, long long,    //
+                                                unsigned char, unsigned short,  //
+                                                unsigned int, unsigned long long>{};
 
 int main()
 {
@@ -28,43 +41,38 @@ int main()
     //     expect( AlwaysReturn<4>() == _t(3) );
     // };
 
-    "AlwaysReturn<N>() is same as N"_test = [] {
-        ConstexprForEachType<char, short, int, long long,                         //
-                             unsigned char, unsigned short,                       //
-                             unsigned int, unsigned long long>( []<typename T> {  //
-            ConstexprUnroll<1000>( []<std::size_t N> {                            //
-                constexpr T N_T = static_cast<T>( N );
-                expect( AlwaysReturn<N_T>() == _t( N_T ) );
-            } );
-        } );
-    };
+    // "AlwaysReturn<N>() is same as N"_test = [] {
+    //     ConstexprForEachType<char, short, int, long long,                         //
+    //                          unsigned char, unsigned short,                       //
+    //                          unsigned int, unsigned long long>( []<typename T> {  //
+    //         ConstexprUnroll<5>( []<T N> {                                         //
+    //             constexpr T N_T = static_cast<T>( N );
+    //             expect( AlwaysReturn<N_T>() == _t( N_T ) );
+    //         } );
+    //     } );
+    // };
 
-    // "Invoke to be identity"_test = []<typename TestType> {
-    //     []<TestType... Samples>( std::integer_sequence<TestType, Samples...> )
-    //     {
-    //         ( ( test( "N = " + std::to_string( Samples ) ) =
-    //                 [] {  //
-    //                     expect( AlwaysReturn<Samples>() == _t( Samples ) );
-    //                 } ),
-    //           ... );
-    //     }
-    //     ( IntegralValueSamples<TestType> );
-    // } | std::tuple<int, long long, unsigned char>{};
+    "AlwaysReturn<N>() should be the same as N"_test = []<typename T> {
+        test( "Type = " + TypeName<T> ) = []<typename IntConst> {
+            constexpr auto N = IntConst::value;
+            expect( AlwaysReturn<N>() == _t( N ) ) << "Value = " + std::to_string( N );
+            expect( static_cast<T>( AlwaysReturn<N> ) == N / 2 ) << "Value = " + std::to_string( N );
+        } | IntegralValueSamples<T>;
+    } | IntegralTypeSamples;
 
-    // "Template Consume"_test = [] { expect( Consume( AlwaysReturn<123> ) == 123 ); };
+    // "Preserving Type Completeness"_test = [] {
+    //     ConstexprForEachType<int, long long, unsigned char>( []<typename T> {
 
-    "Preserving Type Completeness"_test = [] {
-        ConstexprForEachType<int, long long, unsigned char>( []<typename T> {
+    //     } );
+    // };
 
-        } );
-    };
+    // "Function Pointer Decay"_test = []( auto F ) {
+    //     constexpr auto N = 123;
+    //     auto A = static_cast<decltype( F )>( AlwaysReturn<N> )(
+    //         {} );  //this is incorrect, need to accquire argument type instead
+    //     auto R = F( AlwaysReturn<N> );
 
-    "Function Pointer Decay"_test = []( auto F ) {
-        constexpr auto N = 123;
-        auto A = static_cast<decltype( F )>( AlwaysReturn<N> )( {} );
-        auto R = F( AlwaysReturn<N> );
-
-        expect( type<decltype( R )> == type<decltype( A )> ) << "return type mismatch";
-        expect( R == A && R == N );
-    } | std::tuple{ &ConsumeFuncPtr1, &ConsumeFuncPtr2 };
+    //     expect( type<decltype( R )> == type<decltype( A )> ) << "return type mismatch";
+    //     expect( R == A && R == N );
+    // } | std::tuple{ &ConsumeFuncPtr1, &ConsumeFuncPtr2 };
 }
