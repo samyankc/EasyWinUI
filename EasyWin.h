@@ -289,9 +289,9 @@ namespace EW
             }
             case WM_COMMAND :
             {
-                auto ControlHandle = std::bit_cast<HWND>( lParam );
-                auto ControlIdentifier = LOWORD( wParam );
-                auto NotificationCode = HIWORD( wParam );
+                [[maybe_unused]] auto ControlHandle = std::bit_cast<HWND>( lParam );
+                [[maybe_unused]] auto ControlIdentifier = LOWORD( wParam );
+                [[maybe_unused]] auto NotificationCode = HIWORD( wParam );
                 switch( NotificationCode )
                 {
                     case BN_CLICKED :
@@ -768,7 +768,7 @@ namespace EW
     {
         constexpr PopupWindowControl() {}
         PopupWindowControl( LPCSTR ClassName_ ) : WindowControl( ClassName_, "EW Popup Window" ) {}
-        PopupWindowControl( const PopupWindowControl& Source )
+        PopupWindowControl( const PopupWindowControl& Source ) : WindowControl()
         {
             Handle = Source.Handle ? Source.Handle : NewWindow( "EW Popup Window Class", "EW Popup Window" );
         }
@@ -990,7 +990,7 @@ namespace EW
         return Handles;
     }
 
-    inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+    inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
         constexpr auto Span = []( auto& S ) { return std::span( reinterpret_cast<const BYTE( & )[3]>( S ) ); };
         return [=]( auto... i ) {
@@ -1057,19 +1057,20 @@ namespace EW
             Pixels.resize( ABS( Dimension.cx * Dimension.cy ) );
         }
 
-        auto IsolateColour( RGBQUAD KeepColour, int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
+        auto IsolateColour( RGBQUAD KeepColour, unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
         {
             EasyBitMap NewMap{ *this };
             for( auto&& CurrentPixel : NewMap.Pixels )
                 if( ! Similar( CurrentPixel, KeepColour, SimilarityThreshold ) )
                 {
-                    CurrentPixel = { .rgbReserved = IGNORE_PIXEL };
+                    CurrentPixel = {};
+                    CurrentPixel.rgbReserved = IGNORE_PIXEL;
                 }
             // else CurrentPixel = KeepColour;
             return NewMap;
         }
 
-        auto ExtractByColour( RGBQUAD TargetColour, int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
+        auto ExtractByColour( RGBQUAD TargetColour, unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD ) const
         {
             EasyBitMap NewMap{ *this };
             for( auto&& CurrentPixel : NewMap.Pixels )
@@ -1409,7 +1410,7 @@ namespace EW
             return BitMap;
         }
 
-        inline bool MatchBitMap( const EasyBitMap& ReferenceBitMap, int SimilarityThreshold = SIMILARITY_THRESHOLD )
+        inline bool MatchBitMap( const EasyBitMap& ReferenceBitMap, unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD )
         {
             // need complete re-work
             // capture whole image than compare
