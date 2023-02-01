@@ -49,19 +49,29 @@ int main()
         } | IntegralValueSamples<T>;
     } | IntegralTypeSamples;
 
-    "AlwaysReturn<N> should be convertible to function pointer"_test = []<typename FuncArgSample> {
-        using FuncPtr = typename FuncArgSample::first_type;
-        using ArgTuple = typename FuncArgSample::second_type;
-        test( "Converting to " + TypeName<FuncPtr> ) = []<typename IntConst> {
-            constexpr auto N = IntConst::value;
-            auto InvokeResult = std::apply( static_cast<FuncPtr>( AlwaysReturn<N> ), ArgTuple{} );
-            "Invoke result should be same as N"_test = [InvokeResult, N] { expect( InvokeResult == _t( N ) ); };
-            "Invoke result type should be same as / convertible from N"_test = [InvokeResult, N] {
-                using InvokeResultType = std::remove_cv_t<decltype( InvokeResult )>;
-                using NType = std::remove_cv_t<decltype( N )>;
-                expect( type<InvokeResultType> == type<NType> ||
-                        type_traits::is_convertible_v<NType, InvokeResultType> );
-            };
-        } | IntegralValueSamples<int>;
-    } | FunctionPointerSamples;
+    test( "AlwaysReturn<N> should be convertible to function pointer" ) =  //
+        []<typename FuncArgSample> {
+            using FuncPtr = typename FuncArgSample::first_type;
+            using ArgTuple = typename FuncArgSample::second_type;
+
+            test( "Converting to " + TypeName<FuncPtr> ) =  //
+                []<typename IntConst> {
+                    constexpr auto N = IntConst::value;
+                    auto InvokeResult = std::apply( static_cast<FuncPtr>( AlwaysReturn<N> ), ArgTuple{} );
+
+                    test( "Invoke result should be same as N" ) =  //
+                        [InvokeResult, N] {                        //
+                            expect( InvokeResult == _t( N ) );
+                        };
+
+                    test( "Invoke result type should be convertible from N" ) =  //
+                        [InvokeResult, N] {
+                            using InvokeResultType = std::remove_cv_t<decltype( InvokeResult )>;
+                            using NType = std::remove_cv_t<decltype( N )>;
+                            expect( type_traits::is_convertible_v<NType, InvokeResultType> );
+                        };
+                } |
+                IntegralValueSamples<int>;
+        } |
+        FunctionPointerSamples;
 }
