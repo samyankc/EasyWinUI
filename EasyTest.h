@@ -6,16 +6,12 @@
 #include <cxxabi.h>  //abi::__cxa_demangle()
 
 template<typename T>
-constexpr auto TypeName_imp() noexcept
-{
+constexpr auto TypeName = []<typename U> {
     auto TemplateTypeName = std::string_view{ __PRETTY_FUNCTION__ };
     TemplateTypeName.remove_suffix( 1 );
     TemplateTypeName.remove_prefix( TemplateTypeName.find( '=' ) + 2 );
     return TemplateTypeName;
-}
-
-template<typename T>
-constexpr auto TypeName = TypeName_imp<T>();
+}.template operator()<T>();
 
 template<typename CharT = char>
 auto operator+( const CharT* LHS, std::basic_string_view<CharT> RHS )

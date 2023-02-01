@@ -13,7 +13,7 @@ namespace Debug
 
     struct OnColumn
     {
-        int Offset;
+        int  Offset;
         void Print( const auto&... Content )
         {
             auto MakeString = []( const auto& c ) {
@@ -64,5 +64,13 @@ namespace Debug
     {
         return +[/* Read Error Message */] {};
     }
+
+    template<typename T>
+    constexpr auto TypeName = []<typename U> {
+        auto TemplateTypeName = std::string_view{ __PRETTY_FUNCTION__ };
+        TemplateTypeName.remove_suffix( 1 );
+        TemplateTypeName.remove_prefix( TemplateTypeName.find( '=' ) + 2 );
+        return TemplateTypeName;
+    }.template operator()<T>();
 }  // namespace Debug
 #endif

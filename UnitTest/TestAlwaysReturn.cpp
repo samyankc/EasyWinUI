@@ -4,26 +4,6 @@
 using namespace EasyMeta;
 using namespace boost::ut;
 
-using FuncPtr1 = int ( * )( int, char, int* );
-using FuncPtr2 = double ( * )( int, long long, double* );
-
-template<typename GetSizeFunction, auto... Args>
-auto Consume( GetSizeFunction F )
-{
-    return F( Args... );
-}
-auto ConsumeFuncPtr1( FuncPtr1 F ) { return F( {}, {}, {} ); }
-auto ConsumeFuncPtr2( FuncPtr2 F ) { return F( {}, {}, {} ); }
-
-// template<std::integral T>
-// constexpr auto IntegralValueSamples = MakeHomogeneousTuple<T>( 0, 1, 2, -1, -2,             //
-//                                                                MaxOf<T> / 2, MinOf<T> / 2,  //
-//                                                                MaxOf<T>, MinOf<T> );
-
-// template<std::integral T>
-// constexpr auto IntegralValueSamples =
-//     std::initializer_list<T>{ 0, 1, 2, -1, -2, MaxOf<T> / 2, MinOf<T> / 2, MaxOf<T>, MinOf<T> };
-
 template<std::integral T>
 constexpr auto IntegralValueSamples =
     IntegralConstantTuple<T, 0, 1, 2, -1, -2, MaxOf<T> / 2, MinOf<T> / 2, MaxOf<T>, MinOf<T>>;
@@ -31,6 +11,16 @@ constexpr auto IntegralValueSamples =
 constexpr auto IntegralTypeSamples = std::tuple<char, short, int, long long,    //
                                                 unsigned char, unsigned short,  //
                                                 unsigned int, unsigned long long>{};
+
+template<typename T>
+constexpr auto FuncArgPair = 0;
+
+template<typename R, typename... Args>
+constexpr auto FuncArgPair<R( Args... )> = std::pair<R ( * )( Args... ), std::tuple<Args...>>{};
+
+constexpr auto FunctionPointerSamples =
+    std::make_tuple( FuncArgPair<int()>, FuncArgPair<int( int )>, FuncArgPair<int( char )>,
+                     FuncArgPair<int( int, int )>, FuncArgPair<int( int, char* )>, FuncArgPair<double( int, int )> );
 
 int main()
 {
@@ -55,24 +45,23 @@ int main()
     "AlwaysReturn<N>() should be the same as N"_test = []<typename T> {
         test( "Type = " + TypeName<T> ) = []<typename IntConst> {
             constexpr auto N = IntConst::value;
-            expect( AlwaysReturn<N>() == _t( N ) ) << "Value = " + std::to_string( N );
-            expect( static_cast<T>( AlwaysReturn<N> ) == N / 2 ) << "Value = " + std::to_string( N );
+            expect( AlwaysReturn<N>() == _t( N ) );
         } | IntegralValueSamples<T>;
     } | IntegralTypeSamples;
 
-    // "Preserving Type Completeness"_test = [] {
-    //     ConstexprForEachType<int, long long, unsigned char>( []<typename T> {
-
-    //     } );
-    // };
-
-    // "Function Pointer Decay"_test = []( auto F ) {
-    //     constexpr auto N = 123;
-    //     auto A = static_cast<decltype( F )>( AlwaysReturn<N> )(
-    //         {} );  //this is incorrect, need to accquire argument type instead
-    //     auto R = F( AlwaysReturn<N> );
-
-    //     expect( type<decltype( R )> == type<decltype( A )> ) << "return type mismatch";
-    //     expect( R == A && R == N );
-    // } | std::tuple{ &ConsumeFuncPtr1, &ConsumeFuncPtr2 };
+    "AlwaysReturn<N> should be convertible to function pointer"_test = []<typename FuncArgSample> {
+        using FuncPtr = typename FuncArgSample::first_type;
+        using ArgTuple = typename FuncArgSample::second_type;
+        test( "Converting to " + TypeName<FuncPtr> ) = []<typename IntConst> {
+            constexpr auto N = IntConst::value;
+            auto InvokeResult = std::apply( static_cast<FuncPtr>( AlwaysReturn<N> ), ArgTuple{} );
+            "Invoke result should be same as N"_test = [InvokeResult, N] { expect( InvokeResult == _t( N ) ); };
+            "Invoke result type should be same as / convertible from N"_test = [InvokeResult, N] {
+                using InvokeResultType = std::remove_cv_t<decltype( InvokeResult )>;
+                using NType = std::remove_cv_t<decltype( N )>;
+                expect( type<InvokeResultType> == type<NType> ||
+                        type_traits::is_convertible_v<NType, InvokeResultType> );
+            };
+        } | IntegralValueSamples<int>;
+    } | FunctionPointerSamples;
 }
