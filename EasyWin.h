@@ -46,11 +46,6 @@ namespace
 {
     constexpr inline auto SIMILARITY_THRESHOLD = 30;
 
-    // constexpr auto Unsigned( auto N ) noexcept requires std::integral<decltype( N + 0 )>
-    // {
-    //     return static_cast<std::make_unsigned_t<decltype( N + 0 )>>( N + 0 );
-    // }
-
     constexpr auto Unsigned( std::integral auto N ) noexcept
     {
         return static_cast<std::make_unsigned_t<decltype( N )>>( N );
@@ -85,6 +80,7 @@ namespace
 namespace EW
 {
     int Main();
+
     using namespace std::this_thread;
     using namespace std::chrono_literals;
 
@@ -258,6 +254,97 @@ namespace EW
     using CanvasContent = std::pair<BITMAPINFO, std::vector<RGBQUAD>>;
     inline std::map<HWND, CanvasContent> CanvasContainer;
 
+    struct EasyHandle
+    {
+        HWND Handle;
+
+        using Wrapper = EasyHandle;
+
+        constexpr EasyHandle() noexcept = default;
+        //constexpr EasyHandle( const EasyHandle& ) noexcept = default;
+        constexpr EasyHandle( HWND Src ) noexcept : Handle{ Src } {}
+
+        constexpr operator HWND() const noexcept { return Handle; }
+
+        auto GetParent() const noexcept -> Wrapper { return GetAncestor( Handle, GA_PARENT ); }
+        auto GetOwner() const noexcept -> Wrapper { return GetWindow( Handle, GW_OWNER ); }
+
+        template<std::invocable<HWND, LPSTR, int> auto GetNameText, std::invocable<HWND> auto GetNameLength>
+        auto GetName_impl() const noexcept
+        {
+            using StringType = std::string;
+            using BufferType = StringType::pointer;
+            using SizeType = decltype( GetNameLength( nullptr ) );
+            StringType ResultString;
+            ResultString.resize_and_overwrite( Unsigned( GetNameLength( Handle ) ),
+                                               [Handle = Handle]( BufferType Buffer, SizeType BufferSize ) {
+                                                   return GetNameText( Handle, Buffer, BufferSize + 1 );
+                                               } );
+            return ResultString;
+        }
+
+        auto ClassName() const noexcept { return GetName_impl<GetClassName, AlwaysReturn<256>>(); }
+        auto WindowText() const noexcept { return GetName_impl<GetWindowText, GetWindowTextLength>(); }
+        auto Text() const noexcept { return WindowText(); }
+        auto Name() const noexcept { return WindowText(); }
+
+        auto ShowName() const noexcept
+        {
+            std::cout << std::left << std::setw( 13 ) << std::hex                    //
+                      << std::showbase << ( Handle ) << std::dec << std::setw( 32 )  //
+                      << "[ " << ClassName() << " ] [ " << Name() << " ] \n";
+        }
+
+        auto ShowAllChild() const noexcept
+        {
+            EnumChildWindows( Handle,
+                              []( HWND ChildHandle, LPARAM ) -> WINBOOL {
+                                  std::cout << "\\ ";
+                                  EasyHandle{ ChildHandle }.ShowName();
+                                  return true;
+                              },
+                              {} );
+        }
+
+        auto ChildHandles() const noexcept
+        {
+            std::vector<EasyHandle> Handles;
+
+            auto ChildCount = 8uz;
+            Handles.reserve( ChildCount );
+
+            EnumChildWindows(
+                Handle,
+                []( HWND Handle, LPARAM lParam_ ) -> WINBOOL {
+                    reinterpret_cast<std::vector<EasyHandle>*>( lParam_ )->emplace_back( Handle );
+                    return true;
+                },
+                reinterpret_cast<LPARAM>( &Handles ) );
+
+            return Handles;
+        }
+
+        template<auto RectRetriever>
+        auto GetRect() const noexcept
+        {
+            RECT rect;
+            RectRetriever( Handle, &rect );
+            return rect;
+        }
+
+        auto Width() const noexcept
+        {
+            auto [left, top, right, bottom] = GetRect<GetWindowRect>();
+            return right - left;
+        }
+
+        auto Height() const noexcept
+        {
+            auto [left, top, right, bottom] = GetRect<GetWindowRect>();
+            return bottom - top;
+        }
+    };
+
     inline LRESULT CALLBACK WndProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam )
     {
         switch( msg )
@@ -277,10 +364,10 @@ namespace EW
                     {
                         auto&& [BI, Pixels] = CanvasContent;
                         auto hdc = GetDC( CanvasHandle );
-                        SetDIBitsToDevice( hdc, 0, 0,                         //
-                                           Unsigned( BI.bmiHeader.biWidth ),  //
-                                           Unsigned( BI.bmiHeader.biHeight ), 0, 0, 0,
-                                           Unsigned( BI.bmiHeader.biHeight ), Pixels.data(), &BI, DIB_RGB_COLORS );
+                        SetDIBitsToDevice( hdc, 0, 0,                    //
+                                           ABS( BI.bmiHeader.biWidth ),  //
+                                           ABS( BI.bmiHeader.biHeight ), 0, 0, 0, ABS( BI.bmiHeader.biHeight ),
+                                           Pixels.data(), &BI, DIB_RGB_COLORS );
                         ReleaseDC( CanvasHandle, hdc );
                     }
                 }
@@ -334,7 +421,7 @@ namespace EW
             }
             case WM_CLOSE :
             {
-                if( GetWindow( hwnd, GW_OWNER ) == NULL )
+                if( EasyHandle{ hwnd }.GetOwner() == NULL )
                     DestroyWindow( hwnd );
                 else
                     ShowWindow( hwnd, SW_HIDE );
@@ -342,7 +429,7 @@ namespace EW
             }
             case WM_DESTROY :
             {
-                PostQuitMessage( 0 );
+                PostQuitMessage( EXIT_SUCCESS );
                 return 0;
             }
             default : break;
@@ -361,27 +448,11 @@ namespace EW
 
     struct BasicWindowHandle
     {
-        HWND Handle{ NULL };
+        EasyHandle Handle{ NULL };
 
-        template<auto RectRetriever>
-        auto GetRect() const noexcept
-        {
-            RECT rect;
-            RectRetriever( Handle, &rect );
-            return rect;
-        }
+        auto Width() const noexcept { return Handle.Width(); }
 
-        auto Width() const noexcept
-        {
-            auto rect = GetRect<GetWindowRect>();
-            return rect.right - rect.left;
-        }
-
-        auto Height() const noexcept
-        {
-            auto rect = GetRect<GetWindowRect>();
-            return rect.bottom - rect.top;
-        }
+        auto Height() const noexcept { return Handle.Height(); }
 
         auto GetStyle() const noexcept { return GetWindowLong( Handle, GWL_STYLE ); }
         auto GetExStyle() const noexcept { return GetWindowLong( Handle, GWL_EXSTYLE ); }
@@ -423,16 +494,7 @@ namespace EW
             return SetWindowLong( Handle, GWL_EXSTYLE, Unsigned( GetExStyle() ) & ~TargetExStyle );
         }
 
-        auto TextContent() const noexcept
-        {
-            auto ResultString = std::string{};
-            if( Handle )
-                ResultString.resize_and_overwrite( Unsigned( GetWindowTextLength( Handle ) ),
-                                                   [Handle = Handle]( auto Buffer, auto BufferSize ) {
-                                                       return GetWindowText( Handle, Buffer, BufferSize + 1 );
-                                                   } );
-            return ResultString;
-        }
+        auto TextContent() const noexcept { return Handle.Name(); }
     };
 
     struct ControlConfiguration : BasicWindowHandle
@@ -675,7 +737,7 @@ namespace EW
         SIZE RequiredDimension{};
         POINT AnchorOffset{ ChildSeparation, ChildSeparation };
 
-        static HWND NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ )
+        static auto NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ ) -> EasyHandle
         {
             HWND Handle;
             auto wc = WNDCLASSEX{};
@@ -700,7 +762,7 @@ namespace EW
             return Handle;
         }
 
-        constexpr WindowControl() {}
+        constexpr WindowControl() = default;
 
         WindowControl( LPCSTR ClassName_, LPCSTR WindowName_ ) { Handle = NewWindow( ClassName_, WindowName_ ); }
 
@@ -891,78 +953,6 @@ namespace EW
 
     constexpr auto nMaxCount = 256uz;
 
-    struct EasyHandle
-    {
-        HWND Handle;
-
-        EasyHandle() = default;
-        EasyHandle( const EasyHandle& ) = default;
-        EasyHandle( HWND Src ) : Handle{ Src } {}
-
-        operator HWND() const noexcept { return Handle; }
-
-        template<std::invocable<HWND, LPSTR, int> auto GetNameText, std::invocable<HWND> auto GetNameLength>
-        auto GetName_impl() const noexcept
-        {
-            using StringType = std::string;
-            using BufferType = StringType::pointer;
-            using SizeType = decltype( GetNameLength( nullptr ) );
-            StringType ResultString;
-            ResultString.resize_and_overwrite( Unsigned( GetNameLength( Handle ) ),
-                                               [Handle = Handle]( BufferType Buffer, SizeType BufferSize ) {
-                                                   return GetNameText( Handle, Buffer, BufferSize + 1 );
-                                               } );
-            return ResultString;
-        }
-
-        auto Name() const noexcept { return GetName_impl<GetWindowText, GetWindowTextLength>(); }
-        auto ClassName() const noexcept { return GetName_impl<GetClassName, AlwaysReturn<256>>(); }
-        auto ShowName() const noexcept
-        {
-            std::cout << std::left << std::setw( 13 ) << std::hex                    //
-                      << std::showbase << ( Handle ) << std::dec << std::setw( 32 )  //
-                      << "[ " << ClassName() << " ] [ " << Name() << " ] \n";
-        }
-
-        auto ShowAllChild() const noexcept
-        {
-            EnumChildWindows( Handle,
-                              []( HWND ChildHandle, LPARAM ) -> WINBOOL {
-                                  std::cout << "\\ ";
-                                  EasyHandle{ ChildHandle }.ShowName();
-                                  return true;
-                              },
-                              {} );
-        }
-
-        auto ChildHandles() const noexcept
-        {
-            std::vector<EasyHandle> Handles;
-
-            auto ChildCount = 0uz;
-
-            EnumChildWindows(
-                Handle,
-                []( HWND, LPARAM lParam_ ) -> WINBOOL {
-                    ++*reinterpret_cast<std::size_t*>( lParam_ );
-                    return true;
-                },
-                reinterpret_cast<LPARAM>( &ChildCount ) );
-
-            Handles.reserve( ChildCount );
-
-            EnumChildWindows(
-                Handle,
-                []( HWND Handle, LPARAM lParam_ ) -> WINBOOL {
-                    reinterpret_cast<std::vector<EasyHandle>*>( lParam_ )->emplace_back( Handle );
-                    return true;
-                },
-                reinterpret_cast<LPARAM>( &Handles ) );
-
-            return Handles;
-        }
-    };
-
     inline auto ObtainFocusHandle( Clock::duration Delay = 2s )
     {
         sleep_for( Delay );
@@ -1075,7 +1065,10 @@ namespace EW
             EasyBitMap NewMap{ *this };
             for( auto&& CurrentPixel : NewMap.Pixels )
                 if( ! Similar( CurrentPixel, TargetColour, SimilarityThreshold ) )
-                    CurrentPixel = { .rgbReserved = IGNORE_PIXEL };
+                {
+                    CurrentPixel = {};
+                    CurrentPixel.rgbReserved = IGNORE_PIXEL;
+                }
             return NewMap;
         }
 
@@ -1410,7 +1403,8 @@ namespace EW
             return BitMap;
         }
 
-        inline bool MatchBitMap( const EasyBitMap& ReferenceBitMap, unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD )
+        inline bool MatchBitMap( const EasyBitMap& ReferenceBitMap,
+                                 unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD )
         {
             // need complete re-work
             // capture whole image than compare
