@@ -17,6 +17,7 @@
 #include <memory>
 #include <minwindef.h>
 #include <optional>
+#include <expected>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -133,98 +134,6 @@ namespace EW
         return Debounce( 150ms, std::forward<Callable>( Action ) );
     }
 
-    struct ThreadPool
-    {
-        using TaskType = std::function<void()>;
-        using TaskQueueType = std::queue<TaskType>;
-        struct Worker
-        {
-            TaskType Task;
-            std::atomic<bool> Idle;
-            std::atomic<bool> Spinning;
-
-            Worker() : Idle{ true }, Spinning{ true }
-            {
-                std::thread( [this] {
-                    while( Spinning )
-                    {
-                        Idle.wait( true, std::memory_order_acquire );
-                        if( Task ) Task();
-                        Idle.store( true, std::memory_order_release );
-                    }
-                } ).detach();
-            }
-
-            void Activate()
-            {
-                Idle.store( false, std::memory_order_release );
-                Idle.notify_one();
-            }
-
-            bool Available()
-            {
-                if( Idle.load( std::memory_order_acquire ) ) return true;
-                Idle.notify_one();
-                return false;
-            }
-
-            ~Worker()
-            {
-                Spinning.store( false );
-                Task = nullptr;
-                if( Idle ) Activate();
-            }
-        };
-
-        constexpr static auto ThreadCount = 4uz;
-
-        inline static auto Workers = std::vector<Worker>( ThreadCount );
-
-        inline static auto TaskQueue = TaskQueueType{};
-        inline static auto TaskQueueFilled = std::atomic<bool>{};
-        inline static auto TaskQueueMutex = std::mutex{};
-        inline static auto TaskDistributor =
-            ( std::thread( [] {
-                  while( true )
-                  {
-                      TaskQueueFilled.wait( false, std::memory_order_acquire );
-
-                      auto IdleWorker = std::ranges::find_if( Workers, &Worker::Available );
-
-                      if( IdleWorker != Workers.end() )
-                      {
-                          auto& W = *IdleWorker;
-                          W.Task = std::move( TaskQueue.front() );
-                          W.Activate();
-                          {
-                              std::scoped_lock Lock( TaskQueueMutex );
-                              TaskQueue.pop();
-                              if( TaskQueue.empty() ) TaskQueueFilled.store( false, std::memory_order_release );
-                          }
-                      }
-                  }
-              } ).detach(),
-              0 );
-
-        static void WaitComplete()
-        {
-            while( ! TaskQueue.empty() )
-            {
-                TaskQueueFilled.notify_one();
-                std::this_thread::yield();
-            }
-            while( ! std::ranges::all_of( Workers, &Worker::Available ) ) std::this_thread::yield();
-        }
-
-        static void Execute( TaskType NewTask )
-        {
-            std::scoped_lock Lock( TaskQueueMutex );
-            TaskQueue.push( std::move( NewTask ) );
-            TaskQueueFilled.store( true, std::memory_order_release );
-            TaskQueueFilled.notify_one();
-        }
-    };
-
     struct Spacer
     {
         int x{};
@@ -234,9 +143,10 @@ namespace EW
     {
     } LineBreak, NewLine;
 
-    constexpr auto AlwaysZero = 0LL;
+    [[maybe_unused]] constexpr auto AlwaysZero = 0LL;
+    [[maybe_unused]] constexpr auto Ignored = 0LL;
 
-    constexpr auto EmptyAction = [] {};
+    [[maybe_unused]] constexpr auto EmptyAction = [] {};
     using ControlAction = std::function<void()>;
 
     inline std::map<HWND, ControlAction> ActionContainer;
@@ -256,7 +166,7 @@ namespace EW
 
     struct EasyHandle
     {
-        HWND Handle;
+        HWND Handle{};
 
         using Wrapper = EasyHandle;
 
@@ -266,8 +176,10 @@ namespace EW
 
         constexpr operator HWND() const noexcept { return Handle; }
 
-        auto GetParent() const noexcept -> Wrapper { return GetAncestor( Handle, GA_PARENT ); }
-        auto GetOwner() const noexcept -> Wrapper { return GetWindow( Handle, GW_OWNER ); }
+        auto Parent() const noexcept -> Wrapper { return GetAncestor( Handle, GA_PARENT ); }
+        auto Owner() const noexcept -> Wrapper { return GetWindow( Handle, GW_OWNER ); }
+        auto Style() const noexcept { return Unsigned( GetWindowLong( Handle, GWL_STYLE ) ); }
+        auto ExStyle() const noexcept { return Unsigned( GetWindowLong( Handle, GWL_EXSTYLE ) ); }
 
         template<std::invocable<HWND, LPSTR, int> auto GetNameText, std::invocable<HWND> auto GetNameLength>
         auto GetName_impl() const noexcept
@@ -285,6 +197,7 @@ namespace EW
 
         auto ClassName() const noexcept { return GetName_impl<GetClassName, AlwaysReturn<256>>(); }
         auto WindowText() const noexcept { return GetName_impl<GetWindowText, GetWindowTextLength>(); }
+        auto TextContent() const noexcept { return WindowText(); }
         auto Text() const noexcept { return WindowText(); }
         auto Name() const noexcept { return WindowText(); }
 
@@ -384,8 +297,7 @@ namespace EW
                     case BN_CLICKED :
                     {
                         if( ActionContainer.contains( ControlHandle ) )
-                            //std::thread( ActionContainer[ControlHandle] ).detach();
-                            ThreadPool::Execute( ActionContainer[ControlHandle] );
+                            std::thread( ActionContainer[ControlHandle] ).detach();
                         break;
                     }
                     case EN_CHANGE :
@@ -421,7 +333,7 @@ namespace EW
             }
             case WM_CLOSE :
             {
-                if( EasyHandle{ hwnd }.GetOwner() == NULL )
+                if( EasyHandle{ hwnd }.Owner() == NULL )
                     DestroyWindow( hwnd );
                 else
                     ShowWindow( hwnd, SW_HIDE );
@@ -446,55 +358,40 @@ namespace EW
         int nCmdShow;
     } EntryPointParamPack{};
 
-    struct BasicWindowHandle
+    struct BasicWindowHandle : EasyHandle
     {
-        EasyHandle Handle{ NULL };
-
-        auto Width() const noexcept { return Handle.Width(); }
-
-        auto Height() const noexcept { return Handle.Height(); }
-
-        auto GetStyle() const noexcept { return GetWindowLong( Handle, GWL_STYLE ); }
-        auto GetExStyle() const noexcept { return GetWindowLong( Handle, GWL_EXSTYLE ); }
-
         auto ReSize( SIZE NewDimension ) const noexcept
         {
             auto ClientRect = RECT{ 0, 0, NewDimension.cx, NewDimension.cy };
-            AdjustWindowRect( &ClientRect, Unsigned( GetStyle() ), false );
+            AdjustWindowRect( &ClientRect, Style(), false );
             auto NewWidth{ ClientRect.right - ClientRect.left },  //
                 NewHeight{ ClientRect.bottom - ClientRect.top };
-            SetWindowPos( Handle, HWND_NOTOPMOST, 0, 0, NewWidth, NewHeight,
+            SetWindowPos( Handle, HWND_NOTOPMOST, Ignored, Ignored, NewWidth, NewHeight,
                           // SWP_SHOWWINDOW |
                           SWP_NOMOVE | SWP_NOZORDER );
         }
 
         auto MoveTo( POINT NewPoint ) const noexcept
         {
-            SetWindowPos( Handle, HWND_NOTOPMOST, NewPoint.x, NewPoint.y, 0, 0,
-                          SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOZORDER );
+            auto [X, Y] = NewPoint;
+            SetWindowPos( Handle, HWND_NOTOPMOST, X, Y, Ignored, Ignored, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOZORDER );
         }
 
-        auto AddStyle( DWORD NewStyle ) const noexcept
+        auto SetStyle( DWORD NewStyleValue ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_STYLE, Unsigned( GetStyle() ) | NewStyle );
+            return SetWindowLong( Handle, GWL_STYLE, NewStyleValue );
         }
 
-        auto RemoveStyle( DWORD TargetStyle ) const noexcept
+        auto SetExStyle( DWORD NewExStyleValue ) const noexcept
         {
-            return SetWindowLong( Handle, GWL_STYLE, Unsigned( GetStyle() ) & ~TargetStyle );
+            return SetWindowLong( Handle, GWL_EXSTYLE, NewExStyleValue );
         }
 
-        auto AddExStyle( DWORD NewExStyle ) const noexcept
-        {
-            return SetWindowLong( Handle, GWL_EXSTYLE, Unsigned( GetExStyle() ) | NewExStyle );
-        }
+        auto AddStyle( DWORD NewStyle ) const noexcept { return SetStyle( Style() | NewStyle ); }
+        auto RemoveStyle( DWORD TargetStyle ) const noexcept { return SetStyle( Style() & ~TargetStyle ); }
 
-        auto RemoveExStyle( DWORD TargetExStyle ) const noexcept
-        {
-            return SetWindowLong( Handle, GWL_EXSTYLE, Unsigned( GetExStyle() ) & ~TargetExStyle );
-        }
-
-        auto TextContent() const noexcept { return Handle.Name(); }
+        auto AddExStyle( DWORD NewExStyle ) const noexcept { return SetExStyle( ExStyle() | NewExStyle ); }
+        auto RemoveExStyle( DWORD TargetExStyle ) const noexcept { return SetExStyle( ExStyle() & ~TargetExStyle ); }
     };
 
     struct ControlConfiguration : BasicWindowHandle
@@ -517,12 +414,12 @@ namespace EW
         };
     };
 
-    constexpr auto MenuID = MakeConfigurator( &ControlConfiguration::MenuID );
-    constexpr auto Label = MakeConfigurator( &ControlConfiguration::Label );
-    constexpr auto Style = MakeConfigurator( &ControlConfiguration::Style );
-    constexpr auto ExStyle = MakeConfigurator( &ControlConfiguration::ExStyle );
-    constexpr auto Origin = MakeConfigurator( &ControlConfiguration::Origin );
-    constexpr auto Dimension = MakeConfigurator( &ControlConfiguration::Dimension );
+    [[maybe_unused]] constexpr auto MenuID = MakeConfigurator( &ControlConfiguration::MenuID );
+    [[maybe_unused]] constexpr auto Label = MakeConfigurator( &ControlConfiguration::Label );
+    [[maybe_unused]] constexpr auto Style = MakeConfigurator( &ControlConfiguration::Style );
+    [[maybe_unused]] constexpr auto ExStyle = MakeConfigurator( &ControlConfiguration::ExStyle );
+    [[maybe_unused]] constexpr auto Origin = MakeConfigurator( &ControlConfiguration::Origin );
+    [[maybe_unused]] constexpr auto Dimension = MakeConfigurator( &ControlConfiguration::Dimension );
 
     struct OnChangeEvent
     {
@@ -721,14 +618,14 @@ namespace EW
         }
     };
 
-    constexpr auto TextLabel = TextLabelControl{};
-    constexpr auto Canvas = CanvasControl{};
-    constexpr auto TextBox = TextBoxControl{};
-    constexpr auto TextArea = TextAreaControl{};
-    constexpr auto ListBox = ListBoxControl{};
-    constexpr auto ListView = ListViewControl{};
-    constexpr auto ProgressBar = ProgressBarControl{};
-    constexpr auto Button = ButtonControl{ [] {} };
+    [[maybe_unused]] constexpr auto TextLabel = TextLabelControl{};
+    [[maybe_unused]] constexpr auto Canvas = CanvasControl{};
+    [[maybe_unused]] constexpr auto TextBox = TextBoxControl{};
+    [[maybe_unused]] constexpr auto TextArea = TextAreaControl{};
+    [[maybe_unused]] constexpr auto ListBox = ListBoxControl{};
+    [[maybe_unused]] constexpr auto ListView = ListViewControl{};
+    [[maybe_unused]] constexpr auto ProgressBar = ProgressBarControl{};
+    [[maybe_unused]] constexpr auto Button = ButtonControl{ [] {} };
 
     struct WindowControl : BasicWindowHandle
     {
@@ -748,8 +645,14 @@ namespace EW
             wc.hbrBackground = reinterpret_cast<HBRUSH>( COLOR_WINDOW );
             wc.lpszClassName = ClassName_;
 
-            if( ! RegisterClassEx( &wc ) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS )
-                return MessageBox( NULL, "Window Registration Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK ), nullptr;
+            if( ! RegisterClassEx( &wc ) )
+            {
+                if( GetLastError() == ERROR_CLASS_ALREADY_EXISTS )
+                    MessageBox( NULL, "Class Already Exists!", "Error!", MB_ICONEXCLAMATION | MB_OK );
+                else
+                    MessageBox( NULL, "Window Registration Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
+                return nullptr;
+            }
 
             Handle = CreateWindowEx( WS_EX_LEFT | WS_EX_DLGMODALFRAME,  //
                                      ClassName_, WindowTitle_,          //
@@ -770,7 +673,7 @@ namespace EW
 
         WindowControl( const WindowControl& Source )
         {
-            Handle = Source.Handle ? Source.Handle : NewWindow( "EW Window Class", "EW Window" );
+            Handle = Source.Handle ? Source.Handle : NewWindow( "EW Window Class", "EW Window" ).Handle;
         }
 
         auto operator()( LPCSTR ClassName_ ) const { return WindowControl( ClassName_ ); }
@@ -832,7 +735,7 @@ namespace EW
         PopupWindowControl( LPCSTR ClassName_ ) : WindowControl( ClassName_, "EW Popup Window" ) {}
         PopupWindowControl( const PopupWindowControl& Source ) : WindowControl()
         {
-            Handle = Source.Handle ? Source.Handle : NewWindow( "EW Popup Window Class", "EW Popup Window" );
+            Handle = Source.Handle ? Source.Handle : NewWindow( "EW Popup Window Class", "EW Popup Window" ).Handle;
         }
 
         auto Paint( CanvasContent Content ) const noexcept
@@ -849,7 +752,6 @@ namespace EW
     inline constexpr auto PopupWindow = PopupWindowControl{};
 
     template<DerivedFrom<ControlConfiguration> T>
-    //constexpr decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     constexpr decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
     {
         if constexpr( std::is_const_v<std::remove_reference_t<T>> )
@@ -947,11 +849,9 @@ namespace EW
 
     // EasyWin Control
 
-    constexpr auto IGNORE_PIXEL = decltype( RGBQUAD::rgbReserved ){ 1 };
-    constexpr auto REJECT_COLOUR = decltype( RGBQUAD::rgbReserved ){ 2 };
-    constexpr auto IGNORE_TEXT = "_WwWwWwW_";
-
-    constexpr auto nMaxCount = 256uz;
+    [[maybe_unused]] constexpr auto IGNORE_PIXEL = decltype( RGBQUAD::rgbReserved ){ 1 };
+    [[maybe_unused]] constexpr auto REJECT_COLOUR = decltype( RGBQUAD::rgbReserved ){ 2 };
+    [[maybe_unused]] constexpr auto IGNORE_TEXT = "_WwWwWwW_";
 
     inline auto ObtainFocusHandle( Clock::duration Delay = 2s )
     {
@@ -980,6 +880,8 @@ namespace EW
         return Handles;
     }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wbitwise-instead-of-logical"
     inline bool Similar( RGBQUAD LHS, RGBQUAD RHS, unsigned int SimilarityThreshold = SIMILARITY_THRESHOLD )
     {
         constexpr auto Span = []( auto& S ) { return std::span( reinterpret_cast<const BYTE( & )[3]>( S ) ); };
@@ -987,6 +889,7 @@ namespace EW
             return ( ( ABS( Span( LHS )[i] - Span( RHS )[i] ) <= SimilarityThreshold ) & ... );
         }( 0u, 1u, 2u );
     }
+#pragma clang diagnostic pop
 
     constexpr auto operator+( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x + RHS.x, LHS.y + RHS.y }; }
     constexpr auto operator-( const POINT& LHS, const POINT& RHS ) { return POINT{ LHS.x - RHS.x, LHS.y - RHS.y }; }
