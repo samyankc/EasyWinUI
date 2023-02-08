@@ -634,10 +634,9 @@ namespace EW
         SIZE RequiredDimension{};
         POINT AnchorOffset{ ChildSeparation, ChildSeparation };
 
-        static auto NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ ) -> EasyHandle
+        static auto NewWindow_impl( LPCSTR ClassName_, LPCSTR WindowTitle_ ) -> std::expected<EasyHandle, LPCSTR>
         {
-            HWND Handle;
-            auto wc = WNDCLASSEX{};
+            auto wc = WNDCLASSEXA{};
             wc.cbSize = sizeof( WNDCLASSEX );
             wc.style = CS_HREDRAW | CS_VREDRAW;
             wc.lpfnWndProc = EW::WndProc;
@@ -646,23 +645,26 @@ namespace EW
             wc.lpszClassName = ClassName_;
 
             if( ! RegisterClassEx( &wc ) )
-            {
-                if( GetLastError() == ERROR_CLASS_ALREADY_EXISTS )
-                    MessageBox( NULL, "Class Already Exists!", "Error!", MB_ICONEXCLAMATION | MB_OK );
-                else
-                    MessageBox( NULL, "Window Registration Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK );
-                return nullptr;
-            }
+                return std::unexpected( GetLastError() == ERROR_CLASS_ALREADY_EXISTS  //
+                                            ? "Class Already Exists!"
+                                            : "Window Registration Failed!" );
 
-            Handle = CreateWindowEx( WS_EX_LEFT | WS_EX_DLGMODALFRAME,  //
-                                     ClassName_, WindowTitle_,          //
-                                     WS_OVERLAPPEDWINDOW,               //
-                                     0, 0, 0, 0,                        //
-                                     NULL, NULL, EW::EntryPointParamPack.hInstance, NULL );
-            if( ! Handle )
-                return MessageBox( NULL, "Window Creation Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK ), nullptr;
+            auto Handle = CreateWindowEx( WS_EX_LEFT | WS_EX_DLGMODALFRAME,  //
+                                          ClassName_, WindowTitle_,          //
+                                          WS_OVERLAPPEDWINDOW,               //
+                                          0, 0, 0, 0,                        //
+                                          NULL, NULL, EW::EntryPointParamPack.hInstance, NULL );
+
+            if( ! Handle ) return std::unexpected( "Window Creation Failed!" );
 
             return Handle;
+        }
+
+        static auto NewWindow( LPCSTR ClassName_, LPCSTR WindowTitle_ ) -> EasyHandle
+        {
+            auto Result = NewWindow_impl( ClassName_, WindowTitle_ );
+            if( ! Result ) MessageBox( NULL, Result.error(), "Error!", MB_ICONEXCLAMATION | MB_OK );
+            return Result.value_or( nullptr );
         }
 
         constexpr WindowControl() = default;
