@@ -7,15 +7,9 @@
 #include <immintrin.h>  //__rdtsc
 
 #include <chrono>
-#include <iomanip>
-#include <ios>
-#include <iostream>
 #include <format>
-#include <string>
-#include <string_view>
 #include <vector>
 #include <algorithm>
-#include <ranges>
 
 namespace EasyBenchmark
 {
@@ -30,8 +24,8 @@ namespace EasyBenchmark
     struct BenchmarkResult
     {
         std::string Title;
-        std::size_t TotalTick;
-        std::size_t TotalIteration;
+        std::size_t TotalTick{};
+        std::size_t TotalIteration{};
         auto Latency() const noexcept { return TotalTick / TotalIteration; }
         auto Throughput() const noexcept { return TickPerSecond * TotalIteration / TotalTick; }
         auto TitleLength() const noexcept { return Title.length(); }
@@ -44,42 +38,39 @@ namespace EasyBenchmark
 
         ~BenchmarkResultAnalyzer()
         {
-            const auto DigitWidth = 18uz;
-            const auto TitleWidth =
-                std::max( std::ranges::max_element( *this, {}, &BenchmarkResult::TitleLength )->Title.length(), 24uz );
-            const auto ThroughputBaseline = static_cast<double>( ( *this )[BaselinePos].Throughput() );
-
-            auto PrintRow = [TW = std::setw( TitleWidth ), DW = std::setw( DigitWidth )](  //
-                                std::string_view Title,                                    //
-                                const auto Latency,                                        //
-                                const auto Throughput,                                     //
-                                const auto Relative,                                       //
-                                const char fill = ' ' )                                    //
-            {
-                // std::cout << std::setfill( fill ) << std::left                       //
-                //           << TW << Title << std::right                               //
-                //           << DW << Latency                                           //
-                //           << DW << Throughput                                        //
-                //           << DW << std::setprecision( 2 ) << std::fixed << Relative  //
-                //           << std::setfill( ' ' ) << '\n';
-            };
-
-            auto PrintLine = [PrintRow] {
-                PrintRow( "", "", "", "", '_' );
-                std::print("\n");
-            };
+            constexpr auto Header = std::string_view{ "Benchmark Summary" };
+            constexpr auto HeaderSpace = Header.size() + 4;
+            constexpr auto HeaderTitleWidth = Header.size() + 9;
+            constexpr auto DigitWidth = 16uz;
 
             std::print(
-                "\n    ______________________"
-                "\n   /                     /"
-                "\n  /  Benchmark Summary  /\n" );
-            PrintRow( " /_____________________/", "Latency", "Throughput", "Relative" );
+                "\n    __{0:_^{2}}_"  //
+                "\n   / {0: ^{2}} /"  //
+                "\n  / {1: ^{2}} /"   //
+                "\n /_{0:_^{2}}_/\n",
+                "", Header, HeaderSpace );
+
+            const auto TitleWidth =
+                std::max( std::ranges::max_element( *this, {}, &BenchmarkResult::TitleLength )->Title.length(),
+                          HeaderTitleWidth );
+            const auto ThroughputBaseline = static_cast<double>( ( *this )[BaselinePos].Throughput() );
+
+            auto PrintRow = [=]( std::string_view Title,  //
+                                 const auto Latency,      //
+                                 const auto Throughput,   //
+                                 const auto Relative )    //
+            {
+                std::print( " {0:{1}}{2:>{5}}{3:>{5}}{4:>{5}.2}\n",  //
+                            Title, TitleWidth, Latency, Throughput, Relative, DigitWidth );
+            };
+
+            auto PrintLine = [=] { std::print( "_{:_<{}}\n", "", TitleWidth + DigitWidth * 3 ); };
+
+            PrintRow( "", "Latency", "Throughput", "Relative" );
             PrintLine();
             for( auto&& Result : *this )
-                PrintRow( Result.Title,         //
-                          Result.Latency(),     //
-                          Result.Throughput(),  //
-                          Result.Throughput() / ThroughputBaseline );
+                PrintRow( Result.Title, Result.Latency(), Result.Throughput(),
+                          static_cast<double>( Result.Throughput() ) / ThroughputBaseline );
             PrintLine();
         }
     };
@@ -120,7 +111,7 @@ namespace EasyBenchmark
 
             ~Iterator()
             {
-                Base.Result.TotalCycle = __rdtsc() - StartCycle;
+                Base.Result.TotalTick = __rdtsc() - StartCycle;
                 Base.Result.TotalIteration = BaseRange::MaxIteration - RemainIteration;
             }
         };
@@ -129,15 +120,25 @@ namespace EasyBenchmark
         auto end() { return Sentinel{}; }
     };
 
-    inline auto Benchmark( std::string&& BenchmarkTitle )
+    inline struct BenchmarkBaseLine_t
     {
-        std::cout << "Benchmarking... " << BenchmarkTitle << "\n";
-        BenchmarkResults.push_back( { " " + BenchmarkTitle, 0, 0 } );
+    } AsBaseLine;
+
+    inline auto Benchmark( std::string BenchmarkTitle )
+    {
+        std::print( "Benchmarking... {}\n", BenchmarkTitle );
+        BenchmarkResults.push_back( { std::move( BenchmarkTitle ) } );
         return BenchmarkExecutor{ BenchmarkResults.back() };
-    }  // namespace
+    }
+
+    inline auto Benchmark( std::string BenchmarkTitle, BenchmarkBaseLine_t )
+    {
+        BenchmarkResults.BaselinePos = BenchmarkResults.size();
+        return Benchmark( std::move( BenchmarkTitle ) );
+    }
 
 }  // namespace EasyBenchmark
 
-using EasyBenchmark::Benchmark;  // NOLINT
-
-#endif /* BENCHMARK_H */
+using EasyBenchmark::Benchmark;   // NOLINT
+using EasyBenchmark::AsBaseLine;  // NOLINT
+#endif                            /* BENCHMARK_H */
