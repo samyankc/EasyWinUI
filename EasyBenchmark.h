@@ -106,12 +106,12 @@ namespace EasyBenchmark
                 : Base{ Base_ },                                     //
                   EndTime{ clock::now() + BaseRange::MaxDuration },  //
                   RemainIteration{ BaseRange::MaxIteration },        //
-                  StartCycle{ __rdtsc() }
+                  StartCycle{ GetTimeMark() }
             {}
 
             ~Iterator()
             {
-                Base.Result.TotalTick = __rdtsc() - StartCycle;
+                Base.Result.TotalTick = GetTimeMark() - StartCycle;
                 Base.Result.TotalIteration = BaseRange::MaxIteration - RemainIteration;
             }
         };
