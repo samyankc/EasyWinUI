@@ -10,72 +10,83 @@
 #include <iomanip>
 #include <ios>
 #include <iostream>
+#include <format>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <algorithm>
+#include <ranges>
 
-namespace
+namespace EasyBenchmark
 {
+    // helpers
+    namespace
+    {
+        inline auto GetTimeMark() noexcept { return __rdtsc(); }
+    }
+
+    constexpr auto TickPerSecond = 1'000'000'000;
+
     struct BenchmarkResult
     {
         std::string Title;
-        std::size_t TotalCycle;
+        std::size_t TotalTick;
         std::size_t TotalIteration;
-        auto        Latency() const { return TotalCycle / TotalIteration; }
-        auto        Throughput() const { return 1000000000 * TotalIteration / TotalCycle; }
-        auto        operator<( const auto& RHS ) const { return Title.length() < RHS.Title.length(); }
+        auto Latency() const noexcept { return TotalTick / TotalIteration; }
+        auto Throughput() const noexcept { return TickPerSecond * TotalIteration / TotalTick; }
+        auto TitleLength() const noexcept { return Title.length(); }
     };
 
-    struct BenchmarkAnalyzer : std::vector<BenchmarkResult>
+    struct BenchmarkResultAnalyzer : std::vector<BenchmarkResult>
     {
         std::size_t BaselinePos;
-        BenchmarkAnalyzer() : std::vector<BenchmarkResult>{}, BaselinePos{ 0 } { reserve( 10 ); }
+        BenchmarkResultAnalyzer() : std::vector<BenchmarkResult>{}, BaselinePos{ 0 } { reserve( 10 ); }
 
-        ~BenchmarkAnalyzer()
+        ~BenchmarkResultAnalyzer()
         {
-            const auto DigitWidth = 18;
-            const auto TitleWidth = std::max( std::max_element( begin(), end() )->Title.length(),  //
-                                              24ull );
+            const auto DigitWidth = 18uz;
+            const auto TitleWidth =
+                std::max( std::ranges::max_element( *this, {}, &BenchmarkResult::TitleLength )->Title.length(), 24uz );
             const auto ThroughputBaseline = static_cast<double>( ( *this )[BaselinePos].Throughput() );
 
-            auto cout_row = [TW = std::setw( TitleWidth ), DW = std::setw( DigitWidth )](  //
+            auto PrintRow = [TW = std::setw( TitleWidth ), DW = std::setw( DigitWidth )](  //
                                 std::string_view Title,                                    //
-                                const auto       Latency,                                  //
-                                const auto       Throughput,                               //
-                                const auto       Relative,                                 //
-                                const char       fill = ' ' )                                    //
+                                const auto Latency,                                        //
+                                const auto Throughput,                                     //
+                                const auto Relative,                                       //
+                                const char fill = ' ' )                                    //
             {
-                std::cout << std::setfill( fill ) << std::left                       //
-                          << TW << Title << std::right                               //
-                          << DW << Latency                                           //
-                          << DW << Throughput                                        //
-                          << DW << std::setprecision( 2 ) << std::fixed << Relative  //
-                          << std::setfill( ' ' ) << '\n';
+                // std::cout << std::setfill( fill ) << std::left                       //
+                //           << TW << Title << std::right                               //
+                //           << DW << Latency                                           //
+                //           << DW << Throughput                                        //
+                //           << DW << std::setprecision( 2 ) << std::fixed << Relative  //
+                //           << std::setfill( ' ' ) << '\n';
             };
 
-            auto cout_line = [cout_row] {
-                cout_row( "", "", "", "", '_' );
-                std::cout << '\n';
+            auto PrintLine = [PrintRow] {
+                PrintRow( "", "", "", "", '_' );
+                std::print("\n");
             };
 
-            std::cout << "\n    ______________________"
-                         "\n   /                     /"
-                         "\n  /  Benchmark Summary  /\n";
-            /**/ cout_row( " /_____________________/", "Latency", "Throughput", "Relative" );
-            cout_line();
+            std::print(
+                "\n    ______________________"
+                "\n   /                     /"
+                "\n  /  Benchmark Summary  /\n" );
+            PrintRow( " /_____________________/", "Latency", "Throughput", "Relative" );
+            PrintLine();
             for( auto&& Result : *this )
-                cout_row( Result.Title,         //
+                PrintRow( Result.Title,         //
                           Result.Latency(),     //
                           Result.Throughput(),  //
                           Result.Throughput() / ThroughputBaseline );
-            cout_line();
+            PrintLine();
         }
     };
 
-    inline static auto BenchmarkResults = BenchmarkAnalyzer{};
+    inline static auto BenchmarkResults = BenchmarkResultAnalyzer{};
 
-    struct BenchmarkContainer
+    struct BenchmarkExecutor
     {
         using clock = std::chrono::steady_clock;
         using time_point = std::chrono::time_point<clock>;
@@ -91,8 +102,8 @@ namespace
         template<typename BaseRange>
         struct Iterator
         {
-            BaseRange&  Base;
-            time_point  EndTime;
+            BaseRange& Base;
+            time_point EndTime;
             std::size_t RemainIteration;
             std::size_t StartCycle;
 
@@ -118,49 +129,15 @@ namespace
         auto end() { return Sentinel{}; }
     };
 
-}  // namespace
+    inline auto Benchmark( std::string&& BenchmarkTitle )
+    {
+        std::cout << "Benchmarking... " << BenchmarkTitle << "\n";
+        BenchmarkResults.push_back( { " " + BenchmarkTitle, 0, 0 } );
+        return BenchmarkExecutor{ BenchmarkResults.back() };
+    }  // namespace
 
-inline auto Benchmark( std::string&& BenchmarkTitle )
-{
-    std::cout << "Benchmarking... " << BenchmarkTitle << "\n";
-    BenchmarkResults.push_back( { " " + BenchmarkTitle, 0, 0 } );
-    return BenchmarkContainer{ BenchmarkResults.back() };
-}
+}  // namespace EasyBenchmark
+
+using EasyBenchmark::Benchmark;  // NOLINT
+
 #endif /* BENCHMARK_H */
-
-
-#ifdef TEST_CODE
-
-#include <vector>
-
-struct BigS
-{
-    int data[999];
-};
-
-int main()
-{
-    for( auto _ : Benchmark( "Without Reserve" ) )
-    {
-        auto v = std::vector<BigS>{};
-        for( int i{ 0 }; i < 20; ++i ) v.push_back( BigS{} );
-    }
-
-    for( auto _ : Benchmark( "With Reserve" ) )
-    {
-        auto v = std::vector<BigS>{};
-        v.reserve( 20 );
-        for( int i{ 0 }; i < 20; ++i ) v.push_back( BigS{} );
-    }
-    for( auto _ : Benchmark( "volatile increment" ) )
-    {
-        for( volatile int i = 0; i < 100; ++i )
-        {}
-    }
-    for( auto _ : Benchmark( "Random Stuff" ) ) [[maybe_unused]]
-        int a = 0;
-    for( auto _ : Benchmark( "What if I have an extremely long title ?" ) )
-    {}
-}
-
-#endif

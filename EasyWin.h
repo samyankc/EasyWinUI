@@ -80,8 +80,6 @@ namespace
 
 namespace EW
 {
-    int Main();
-
     using namespace std::this_thread;
     using namespace std::chrono_literals;
 
@@ -392,9 +390,12 @@ namespace EW
 
         auto AddExStyle( DWORD NewExStyle ) const noexcept { return SetExStyle( ExStyle() | NewExStyle ); }
         auto RemoveExStyle( DWORD TargetExStyle ) const noexcept { return SetExStyle( ExStyle() & ~TargetExStyle ); }
+
+        auto Label( std::string_view NewText ) const noexcept { return SetWindowText( Handle, NewText.data() ); }
+
     };
 
-    struct ControlConfiguration : BasicWindowHandle
+    struct ControlConfiguration : EasyHandle
     {
         std::optional<HWND> Parent;
         std::optional<HMENU> MenuID;
@@ -656,7 +657,6 @@ namespace EW
                                           NULL, NULL, EW::EntryPointParamPack.hInstance, NULL );
 
             if( ! Handle ) return std::unexpected( "Window Creation Failed!" );
-
             return Handle;
         }
 
@@ -749,9 +749,8 @@ namespace EW
         }
     };
 
-    inline constexpr auto Window = WindowControl{};
-
-    inline constexpr auto PopupWindow = PopupWindowControl{};
+    using Window = WindowControl;
+    using PopupWindow = PopupWindowControl;
 
     template<DerivedFrom<ControlConfiguration> T>
     constexpr decltype( auto ) operator<<( T&& LHS, const ControlConfiguration& RHS )
@@ -1348,10 +1347,17 @@ namespace EW
     };
 
 }  // namespace EW
+#define RegisterEntryPoint( MainName )                                                                \
+    ;                                                                                                 \
+    namespace EW                                                                                      \
+    {                                                                                                 \
+        int MainName();                                                                               \
+    }                                                                                                 \
+    int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow ) \
+    {                                                                                                 \
+        EW::EntryPointParamPack = { hInstance, hPrevInstance, lpCmdLine, nCmdShow };                  \
+        return EW::MainName();                                                                        \
+    }                                                                                                 \
+    int EW::MainName()
 
-int WINAPI WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
-{
-    EW::EntryPointParamPack = { hInstance, hPrevInstance, lpCmdLine, nCmdShow };
-    return EW::Main();
-}
 #endif
