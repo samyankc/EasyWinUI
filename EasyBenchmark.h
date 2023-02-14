@@ -4,8 +4,6 @@
 #ifndef EASYBENCHMARK_H
 #define EASYBENCHMARK_H
 
-#include <immintrin.h>  //__rdtsc
-
 #include <chrono>
 #include <format>
 #include <vector>
@@ -13,22 +11,23 @@
 
 namespace EasyBenchmark
 {
+    using namespace std::chrono;
     using namespace std::chrono_literals;
-    using clock = std::chrono::steady_clock;
-    using time_point = clock::time_point;
+    using Clock = high_resolution_clock;
+    using TimePoint = Clock::time_point;
+    using Duration = Clock::duration;
 
-    inline auto CurrentTimeMark() noexcept { return __rdtsc(); }
+    //inline auto CurrentTimeMark() noexcept { return __rdtsc(); }
 
     struct BenchmarkResult
     {
-        constexpr static auto TickPerSecond = 1'000'000'000;
         std::string Title;
-        std::size_t TotalTick{};
-        std::size_t TotalIteration{};
+        Duration TotalDuration{};
+        ssize_t TotalIteration{};
         BenchmarkResult( std::string_view Title ) : Title{ Title } {}
         auto TitleLength() const noexcept { return Title.length(); }
-        auto Latency() const noexcept { return TotalTick / TotalIteration; }
-        auto Throughput() const noexcept { return TickPerSecond * TotalIteration / TotalTick; }
+        auto Latency() const noexcept { return TotalDuration.count() / TotalIteration; }
+        auto Throughput() const noexcept { return Duration::period::den * TotalIteration / TotalDuration.count(); }
     };
 
     struct DefaultExecutor
@@ -36,7 +35,7 @@ namespace EasyBenchmark
         using ResultContainer = BenchmarkResult;
 
         inline static auto MaxDuration = 3s;
-        inline static auto MaxIteration = 10000uz;
+        inline static auto MaxIteration = 1000z;
 
         ResultContainer& Result;
 
@@ -49,27 +48,27 @@ namespace EasyBenchmark
         struct Iterator
         {
             ResultContainer& Result;
-            time_point EndTime;
-            std::size_t RemainIteration;
-            decltype( CurrentTimeMark() ) StartTimeMark;
+            TimePoint BenchmarkEndTime;
+            TimePoint StartTimeMark;
+            ssize_t RemainIteration;
 
             auto operator*() { return UnusedIdentifier{}; }
             //auto operator*() { return nullptr; }
             auto operator++() { --RemainIteration; }
-            auto operator!=( Sentinel ) { return RemainIteration > 0 && clock::now() < EndTime; }
+            auto operator!=( Sentinel ) { return RemainIteration > 0 && Clock::now() < BenchmarkEndTime; }
 
             Iterator( ResultContainer& Result_ )
-                : Result{ Result_ },                      //
-                  EndTime{ clock::now() + MaxDuration },  //
-                  RemainIteration{ MaxIteration },        //
-                  StartTimeMark{ CurrentTimeMark() }
+                : Result{ Result_ },                               //
+                  BenchmarkEndTime{ Clock::now() + MaxDuration },  //
+                  StartTimeMark{ Clock::now() },                   //
+                  RemainIteration{ MaxIteration }
             {
                 std::print( "Benchmarking... {}\n", Result.Title );
             }
 
             ~Iterator()
             {
-                Result.TotalTick = CurrentTimeMark() - StartTimeMark;
+                Result.TotalDuration = Clock::now() - StartTimeMark;
                 Result.TotalIteration = MaxIteration - RemainIteration;
             }
         };
@@ -86,7 +85,7 @@ namespace EasyBenchmark
         std::size_t BaselinePos;
         BenchmarkResultAnalyzer() : Samples{}, BaselinePos{ 0uz } { Samples.reserve( 10 ); }
 
-        auto PresentResult()
+        ~BenchmarkResultAnalyzer()
         {
             if( Samples.empty() ) return;
 
@@ -98,11 +97,11 @@ namespace EasyBenchmark
                 std::ranges::max_element( Samples, {}, &BenchmarkResult::TitleLength )->TitleLength(), HeaderSpace );
             const auto ThroughputBaseline = Samples[BaselinePos].Throughput();
 
-            auto PrintLine = [=] { std::print( ">{:─<{}}<\n", "", TitleWidth + DigitWidth * 3 ); };
+            auto PrintLine = [=] { std::print( ">{:─<{}}<\n", "", TitleWidth + DigitWidth * 3 + 4 ); };
             auto PrintRow = [=]( std::string_view Title,                                           //
                                  const auto Latency, const auto Throughput, const auto Relative )  //
             {
-                std::print( " {0:{1}}{2:>{5}}{3:>{5}}{4:>{5}}\n",  //
+                std::print( "   {0:{1}}{2:>{5}}{3:>{5}}{4:>{5}}\n",  //
                             Title, TitleWidth, Latency, Throughput, Relative, DigitWidth );
             };
 
@@ -118,8 +117,6 @@ namespace EasyBenchmark
                           100 * Result.Throughput() / ThroughputBaseline );
             PrintLine();
         }
-
-        ~BenchmarkResultAnalyzer() { PresentResult(); }
     };
 
     inline BenchmarkResultAnalyzer Analyzer{};
