@@ -13,6 +13,7 @@
 
 namespace EasyBenchmark
 {
+    using namespace std::chrono_literals;
     // helpers
     namespace
     {
@@ -28,6 +29,54 @@ namespace EasyBenchmark
         auto TitleLength() const noexcept { return Title.length(); }
         auto Latency() const noexcept { return TotalTick / TotalIteration; }
         auto Throughput() const noexcept { return TickPerSecond * TotalIteration / TotalTick; }
+
+        BenchmarkResult( std::string_view GivenTitle ) : Title( GivenTitle ) {}
+
+        using clock = std::chrono::steady_clock;
+        using time_point = clock::time_point;
+
+        constexpr static auto MaxDuration = 3s;
+        constexpr static auto MaxIteration = 10000uz;
+
+        struct [[maybe_unused]] UnusedIdentifier
+        {};
+
+        struct Sentinel
+        {};
+
+        struct Iterator
+        {
+            using BaseRange = BenchmarkResult;
+            BaseRange& Base;
+            time_point EndTime;
+            std::size_t RemainIteration;
+            std::size_t StartTimeMark;
+
+            auto operator*() { return UnusedIdentifier{}; }
+            //auto operator*() { return nullptr; }
+            auto operator++() { --RemainIteration; }
+            auto operator!=( Sentinel ) { return RemainIteration > 0 && clock::now() < EndTime; }
+
+            Iterator( BaseRange& Base_ )
+                : Base{ Base_ },                                     //
+                  EndTime{ clock::now() + BaseRange::MaxDuration },  //
+                  RemainIteration{ BaseRange::MaxIteration },        //
+                  StartTimeMark{ CurrentTimeMark() }
+            {
+                std::print( "Benchmarking... {}\n", Base.Title );
+            }
+
+            ~Iterator()
+            {
+                Base.TotalTick = CurrentTimeMark() - StartTimeMark;
+                Base.TotalIteration = BaseRange::MaxIteration - RemainIteration;
+            }
+        };
+
+        auto begin() { return Iterator{ *this }; }
+        auto end() { return Sentinel{}; }
+
+        auto& AsBaseLine();  // requires BenchmarkResultAnalyzer to be complete
     };
 
     struct BenchmarkResultAnalyzer
@@ -83,67 +132,18 @@ namespace EasyBenchmark
         }
     };
 
-    inline static auto BenchmarkResults = BenchmarkResultAnalyzer{};
+    inline BenchmarkResultAnalyzer Analyzer{};
 
-    using namespace std::chrono_literals;
-    struct BenchmarkExecutor
+    inline auto& BenchmarkResult::AsBaseLine()
     {
-        using clock = std::chrono::steady_clock;
-        using time_point = clock::time_point;
+        Analyzer.BaselineResultPtr = this;
+        return *this;
+    }
 
-        constexpr static auto MaxDuration = 3s;
-        constexpr static auto MaxIteration = 10000uz;
-
-        BenchmarkResult& Result;
-
-        struct [[maybe_unused]] UnusedIdentifier
-        {};
-
-        struct Sentinel
-        {};
-
-        struct Iterator
-        {
-            using BaseRange = BenchmarkExecutor;
-            BaseRange& Base;
-            time_point EndTime;
-            std::size_t RemainIteration;
-            std::size_t StartTimeMark;
-
-            auto operator*() { return UnusedIdentifier{}; }
-            //auto operator*() { return nullptr; }
-            auto operator++() { --RemainIteration; }
-            auto operator!=( Sentinel ) { return RemainIteration > 0 && clock::now() < EndTime; }
-
-            Iterator( BaseRange& Base_ )
-                : Base{ Base_ },                                     //
-                  EndTime{ clock::now() + BaseRange::MaxDuration },  //
-                  RemainIteration{ BaseRange::MaxIteration },        //
-                  StartTimeMark{ CurrentTimeMark() }
-            {}
-
-            ~Iterator()
-            {
-                Base.Result.TotalTick = CurrentTimeMark() - StartTimeMark;
-                Base.Result.TotalIteration = BaseRange::MaxIteration - RemainIteration;
-            }
-        };
-
-        auto begin() { return Iterator{ *this }; }
-        auto end() { return Sentinel{}; }
-
-        auto AsBaseLine()
-        {
-            BenchmarkResults.BaselineResultPtr = &Result;
-            return *this;
-        }
-    };
-
-    inline auto Benchmark( std::string BenchmarkTitle )
+    inline decltype( auto ) Benchmark( std::string_view BenchmarkTitle )
     {
-        std::print( "Benchmarking... {}\n", BenchmarkTitle );
-        BenchmarkResults.Samples.push_back( { std::move( BenchmarkTitle ) } );
-        return BenchmarkExecutor{ BenchmarkResults.Samples.back() };
+        Analyzer.Samples.emplace_back( BenchmarkTitle );
+        return Analyzer.Samples.back();
     }
 
 }  // namespace EasyBenchmark
