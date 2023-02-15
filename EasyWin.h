@@ -392,7 +392,6 @@ namespace EW
         auto RemoveExStyle( DWORD TargetExStyle ) const noexcept { return SetExStyle( ExStyle() & ~TargetExStyle ); }
 
         auto Label( std::string_view NewText ) const noexcept { return SetWindowText( Handle, NewText.data() ); }
-
     };
 
     struct ControlConfiguration : EasyHandle
@@ -1347,7 +1346,7 @@ namespace EW
     };
 
 }  // namespace EW
-#define RegisterEntryPoint( MainName )                                                                \
+#define EW_RegisterEntryPoint( MainName )                                                             \
     ;                                                                                                 \
     namespace EW                                                                                      \
     {                                                                                                 \
