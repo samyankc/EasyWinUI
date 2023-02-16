@@ -182,7 +182,7 @@ namespace EW
         template<std::invocable<HWND, LPSTR, int> auto GetNameText, std::invocable<HWND> auto GetNameLength>
         auto GetName_impl() const noexcept
         {
-            using StringType = std::string;
+            using StringType = std::basic_string<std::remove_pointer_t<LPSTR>>;
             using BufferType = StringType::pointer;
             using SizeType = decltype( GetNameLength( nullptr ) );
             StringType ResultString;
