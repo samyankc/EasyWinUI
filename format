@@ -9,9 +9,14 @@
 namespace std
 {
     // NOLINTBEGIN
+
+    //
     using fmt::print;
+
+    //
     using fmt::format;
+
     // NOLINTEND
-}
+}  // namespace std
 
 #endif
