@@ -13,6 +13,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <format>
 #include <map>
 #include <memory>
 #include <minwindef.h>
@@ -201,16 +202,18 @@ namespace EW
 
         auto ShowName() const noexcept
         {
-            std::cout << std::left << std::setw( 13 ) << std::hex                    //
-                      << std::showbase << ( Handle ) << std::dec << std::setw( 32 )  //
-                      << "[ " << ClassName() << " ] [ " << Name() << " ] \n";
+            // std::cout << std::left << std::setw( 13 ) << std::hex                    //
+            //           << std::showbase << ( Handle ) << std::dec << std::setw( 32 )  //
+            //           << "[ " << ClassName() << " ] [ " << Name() << " ] \n";
+
+            std::print( "{: <13} [ {} ] [ {} ]\n", static_cast<void*>( Handle ), ClassName(), Name() );
         }
 
         auto ShowAllChild() const noexcept
         {
             EnumChildWindows( Handle,
                               []( HWND ChildHandle, LPARAM ) -> WINBOOL {
-                                  std::cout << "\\ ";
+                                  std::print( "\\ " );
                                   EasyHandle{ ChildHandle }.ShowName();
                                   return true;
                               },
@@ -235,24 +238,22 @@ namespace EW
             return Handles;
         }
 
-        template<auto RectRetriever>
-        auto GetRect() const noexcept
+        auto GetWindowRect() const
         {
-            RECT rect;
-            RectRetriever( Handle, &rect );
-            return rect;
+            if( RECT R; ::GetWindowRect( Handle, &R ) != 0 ) return R;
+            return RECT{};
         }
 
         auto Width() const noexcept
         {
-            auto [left, top, right, bottom] = GetRect<GetWindowRect>();
-            return right - left;
+            auto R = GetWindowRect();  //GetRect<GetWindowRect>();
+            return R.right - R.left;
         }
 
         auto Height() const noexcept
         {
-            auto [left, top, right, bottom] = GetRect<GetWindowRect>();
-            return bottom - top;
+            auto R = GetWindowRect();
+            return R.bottom - R.top;
         }
     };
 
@@ -300,7 +301,6 @@ namespace EW
                     }
                     case EN_CHANGE :
                     {
-                        //std::cout << "EN_CHANGE" << std::endl;
                         auto& CurrentEvent = OnChangeEventThreadContainer[ControlHandle];
 
                         // if thread not started
@@ -310,14 +310,14 @@ namespace EW
                             std::thread( [ControlHandle = ControlHandle,
                                           &ExecutionTimePoint = CurrentEvent.ExecutionTimePoint] {
                                 while( Clock::now() < ExecutionTimePoint ) std::this_thread::yield();
-                                std::cout << "EN_CHANGE Handled  " << GetWindowTextLength( ControlHandle ) << std::endl;
+                                std::print( "EN_CHANGE Handled  {}\n", GetWindowTextLength( ControlHandle ) );
                                 ExecutionTimePoint = {};  // time_point<steady_clock>{};
                             } ).detach();
                         }
                         else
                         {
                             CurrentEvent.ExecutionTimePoint = Clock::now() + 400ms;
-                            std::cout << "EN_CHANGE Skipped" << std::endl;
+                            std::print( "EN_CHANGE Handled\n" );
                         }
                         break;
                     }
@@ -1134,7 +1134,7 @@ namespace EW
 
         EasyControl() : Handle( nullptr ) {}
 
-        EasyControl( EasyHandle _hwnd ) : Handle( _hwnd ) {}
+        EasyControl( EasyHandle Handle ) : Handle{ Handle } {}
 
         EasyControl( const EasyControl& _Control ) = default;
 
@@ -1153,13 +1153,13 @@ namespace EW
                 {
                     for( auto i{ 0 }; auto H : WindowHandles )
                     {
-                        std::cout << "[" << i++ << "] ";
+                        std::print( "[{}]", i++ );
                         H.ShowName();
                     }
-                    std::cout << "Pick handle: ";
+                    std::print( "Pick handle: " );
                     std::size_t choice;
                     std::cin >> choice;
-                    std::cout << "Chosen: ";
+                    std::print( "Chosen: " );
                     WindowHandles[choice].ShowName();
                     Handle = FindWindowEx( WindowHandles[choice], nullptr, ControlName.data(), nullptr );
                     break;
@@ -1169,9 +1169,9 @@ namespace EW
 
         operator HWND() const noexcept { return Handle; }
 
-        auto empty() const noexcept { return Handle == NULL; }
+        auto empty() const noexcept { return Handle == nullptr; }
 
-        auto SendKey( WPARAM VirtualKey, LPARAM HardwareScanCode = 1 )
+        auto SendKey( WPARAM VirtualKey, LPARAM HardwareScanCode = 1 ) const noexcept
         {
             SendMessage( Handle, WM_KEYDOWN, VirtualKey, HardwareScanCode );
             sleep_for( KeyDuration );

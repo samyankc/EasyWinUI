@@ -1,19 +1,24 @@
 #ifndef CUSTOM_DEBUG_H
 #define CUSTOM_DEBUG_H
 
+#ifndef DEBUG
+#define DEBUG
+#endif
+
 #include <cstddef>
 #include <cstdio>
 #include <atomic>
 #include <mutex>
 #include <thread>
 #include <map>
+#include <format>
 
 namespace Debug
 {
 
     struct OnColumn
     {
-        int  Offset;
+        int Offset;
         void Print( const auto&... Content )
         {
             auto MakeString = []( const auto& c ) {
@@ -72,5 +77,27 @@ namespace Debug
         TemplateTypeName.remove_prefix( TemplateTypeName.find( '=' ) + 2 );
         return TemplateTypeName;
     }.template operator()<T>();
+
+    enum class Silent : unsigned { None = 0, Dtor = 1, Ctor = 2 };
+
+    constexpr auto operator&( Silent LHS, Silent RHS ) -> bool
+    {
+        return static_cast<unsigned>( LHS ) & static_cast<unsigned>( RHS );
+    }
+
+    template<typename T, Silent SilentFlag = Silent::None>
+    struct [[maybe_unused]] Noisy
+    {
+        constexpr auto PrintMessage( std::string_view msg ) const
+        {
+            std::print( "[ {} @ {} ] | {}\n", TypeName<T>, static_cast<const void*>( this ), msg );
+        }
+
+        constexpr Noisy() { PrintMessage( "Default Ctor" ); }
+        constexpr Noisy( const Noisy& ) { PrintMessage( "Copy Ctor" ); }
+        constexpr Noisy( Noisy&& ) { PrintMessage( "Move Ctor" ); }
+        constexpr ~Noisy() requires( ( SilentFlag & Silent::Dtor ) ) { PrintMessage( "Dtor" ); }
+        constexpr ~Noisy() requires( ! ( SilentFlag & Silent::Dtor ) ) = default;
+    };
 }  // namespace Debug
 #endif
