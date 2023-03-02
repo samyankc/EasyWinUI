@@ -35,3 +35,6 @@
 .ignore/
 .build/
 .DS_Store
+
+# whitelist
+!*/libfmt.a
