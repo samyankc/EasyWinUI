@@ -7,9 +7,21 @@
 #include <string_view>
 #include <type_traits>
 #include <concepts>
+#include <tuple>
 
 namespace EasyMeta
 {
+
+    template<auto>
+    struct DecomposePointerToMember
+    {};
+
+    template<typename M, typename C, M C::*P>
+    struct DecomposePointerToMember<P>
+    {
+        using ClassType = C;
+        using MemberType = M;
+    };
 
     template<typename Derived, typename Base>
     concept DerivedFrom = std::is_base_of_v<std::decay_t<Base>, std::decay_t<Derived>>;
@@ -80,6 +92,13 @@ namespace EasyMeta
             ( std::forward<Callable>( F ).template operator()<Is>(), ... );
         }
         ( std::make_index_sequence<N>() );
+    }
+
+    template<auto... Args, typename Callable>
+    requires requires( Callable F ) { ( F.template operator()<Args>(), ... ); }
+    constexpr auto TemplateUnroll( Callable&& F )
+    {
+        return std::tuple( std::forward<Callable>( F ).template operator()<Args>()... );
     }
 
     template<std::size_t N, typename CharT>
