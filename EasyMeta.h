@@ -104,13 +104,23 @@ namespace EasyMeta
     template<std::size_t N, typename CharT>
     struct FixedString
     {
-        CharT data[N];
-        constexpr FixedString( const CharT ( &Src )[N] ) { std::copy_n( Src, N, data ); }
-        constexpr operator std::basic_string_view<CharT>() const noexcept { return { data }; }
-        // constexpr auto sv() const noexcept { return std::basic_string_view{ data };
-        // }
-        constexpr auto operator[]( std::size_t i ) const noexcept { return data[i]; }
+        using string_view = std::basic_string_view<CharT>;
+        CharT Data[N];
+        constexpr FixedString( const CharT ( &Src )[N] ) noexcept { std::copy_n( Src, N, Data ); }
+        constexpr operator string_view() const noexcept { return { Data }; }
+        //constexpr auto sv() const noexcept { return string_view{ Data };}
+        constexpr auto operator[]( std::size_t i ) const noexcept { return Data[i]; }
         constexpr auto BufferSize() const noexcept { return N; }
+        constexpr auto Length() const noexcept { return N - 1; }
+        friend constexpr auto operator==( string_view Other, const FixedString& Self ) noexcept
+        {
+            return Other == Self.Data;
+        }
+
+        friend constexpr auto operator==( const FixedString& Self, string_view Other ) noexcept
+        {
+            return Other == Self.Data;
+        }
     };
 
     // template<std::size_t N, typename CharT> FixedString( const CharT ( & )[N] )

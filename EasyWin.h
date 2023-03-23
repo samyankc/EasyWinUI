@@ -62,7 +62,7 @@ namespace
     }
 
     template<std::integral IntegerType>
-    constexpr auto Delta( IntegerType Begin, IntegerType End ) noexcept
+    constexpr auto Delta( IntegerType Begin, std::type_identity_t<IntegerType> End ) noexcept
     {
         return End - Begin;
     }
@@ -74,7 +74,7 @@ namespace
         constexpr auto BufferSize = TargetClassName.BufferSize();
         CharT Buffer[BufferSize];
         GetClassName( Handle, Buffer, BufferSize );
-        return std::basic_string_view{ Buffer } == TargetClassName;
+        return TargetClassName == Buffer;
     }
 
 }  // namespace
