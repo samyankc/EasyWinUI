@@ -68,6 +68,9 @@ namespace EasyMeta
     };
 
     template<auto V>
+    using TypeWrap = integral_constant_extension<decltype( V ), V>;
+
+    template<auto V>
     constexpr auto AlwaysReturn = integral_constant_extension<decltype( V ), V>{};
 
     template<auto... Args, std::invocable Callable>

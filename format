@@ -8,6 +8,8 @@
 
 namespace std
 {
+    // The empy lines are for supressing meaningless hinting
+
     // NOLINTBEGIN
 
     //
