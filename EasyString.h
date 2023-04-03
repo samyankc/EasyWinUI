@@ -77,7 +77,7 @@ namespace EasyString
     {
         struct Impl : StrViewUnit
         {
-            constexpr auto In( StrView Input ) const
+            constexpr auto Search_impl( StrView Input ) const
             {
                 if consteval
                 {
@@ -88,6 +88,13 @@ namespace EasyString
                     return std::search( Input.begin(), Input.end(),  //
                                         std::boyer_moore_searcher( Text.begin(), Text.end() ) );
                 }
+            }
+
+            constexpr auto In( StrView Input ) const -> StrView
+            {
+                auto NewStart = Search_impl( Input );
+                if( NewStart == Input.end() ) return { NewStart, 0 };
+                return { NewStart, Text.length() };
             }
 
             constexpr auto operator()( StrView Source ) const { return In( Source ); }
@@ -136,8 +143,8 @@ namespace EasyString
         {
             constexpr auto operator()( StrView Input ) const -> StrView
             {
-                auto NewStart = Search( Text ).In( Input );
-                if( NewStart == Input.end() ) return {};
+                auto NewStart = Search( Text ).In( Input ).begin();
+                if( NewStart == Input.end() ) return { NewStart, 0 };
                 return { NewStart + Text.length(), Input.end() };
             }
         };
@@ -151,9 +158,9 @@ namespace EasyString
         {
             constexpr auto operator()( StrView Input ) const -> StrView
             {
-                if( Text.empty() ) return Input;
-                auto NewEnd = Search( Text ).In( Input );
-                if( NewEnd == Input.end() ) return {};
+                //if( Text.empty() ) return Input;
+                auto NewEnd = Search( Text ).In( Input ).begin();
+                if( NewEnd == Input.end() ) return { NewEnd, 0 };
                 return { Input.begin(), NewEnd };
             }
         };
@@ -383,18 +390,18 @@ namespace EasyString
         }
     };
 
-    auto operator+( const std::string& LHS, const StrView& RHS ) -> std::string  //
+    inline constexpr auto operator+( const std::string& LHS, const StrView& RHS ) -> std::string  //
     {
         return LHS + std::string{ RHS };
     }
 
-    auto operator+( const StrView& LHS, const auto& RHS ) -> std::string  //
+    constexpr auto operator+( const StrView& LHS, const auto& RHS ) -> std::string  //
     {
         return std::string{ LHS } + RHS;
     }
 
 }  // namespace EasyString
 
-using EasyString::operator+;
+using EasyString::operator+;  // NOLINT
 
 #endif
