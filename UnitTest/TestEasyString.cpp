@@ -85,7 +85,7 @@ auto TestBefore()
         expect( Result.begin() == Input.end() );
     };
 
-    "abcdef | Before( empty ) is empty"_test = [] {
+    "abcdef | Before( empty ) is empty at abcdef begin"_test = [] {
         auto [Text, Input, Result, PipeResult] = PrepareBeforeData( "", "abcdef" );
         expect( StrViewStrongEquality( Result, PipeResult ) );
         expect( Result.empty() );
@@ -102,7 +102,7 @@ auto TestBefore()
 
 int main()
 {
-    //TestSearch();
+    TestSearch();
     TestBefore();
     return 0;
 }

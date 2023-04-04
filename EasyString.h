@@ -92,9 +92,9 @@ namespace EasyString
 
             constexpr auto In( StrView Input ) const -> StrView
             {
-                auto NewStart = Search_impl( Input );
-                if( NewStart == Input.end() ) return { NewStart, 0 };
-                return { NewStart, Text.length() };
+                auto MatchBegin = Search_impl( Input );
+                if( MatchBegin == Input.end() ) return { Input.end(), 0 };
+                return { MatchBegin, Text.length() };
             }
 
             constexpr auto operator()( StrView Source ) const { return In( Source ); }
@@ -143,9 +143,9 @@ namespace EasyString
         {
             constexpr auto operator()( StrView Input ) const -> StrView
             {
-                auto NewStart = Search( Text ).In( Input ).begin();
-                if( NewStart == Input.end() ) return { NewStart, 0 };
-                return { NewStart + Text.length(), Input.end() };
+                auto Match = Search( Text ).In( Input );
+                if( Match.begin() == Input.end() ) return { Input.end(), 0 };
+                return { Match.end(), Input.end() };
             }
         };
         return Impl{ Pattern };
@@ -159,9 +159,9 @@ namespace EasyString
             constexpr auto operator()( StrView Input ) const -> StrView
             {
                 //if( Text.empty() ) return Input;
-                auto NewEnd = Search( Text ).In( Input ).begin();
-                if( NewEnd == Input.end() ) return { NewEnd, 0 };
-                return { Input.begin(), NewEnd };
+                auto Match = Search( Text ).In( Input );
+                if( Match.begin() == Input.end() ) return { Input.end(), 0 };
+                return { Input.begin(), Match.begin() };
             }
         };
         return Impl{ Pattern };
