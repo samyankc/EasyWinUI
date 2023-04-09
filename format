@@ -16,6 +16,14 @@ namespace std
     using fmt::print;
 
     //
+    template<typename... T>
+    FMT_INLINE void println( fmt::format_string<T...> fmt, T&&... Args )
+    {
+        fmt::print( fmt, std::forward<T>( Args )... );
+        fmt::print( "\n" );
+    }
+
+    //
     using fmt::format;
 
     // NOLINTEND

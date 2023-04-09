@@ -13,22 +13,22 @@
 
 namespace EasyString
 {
-    using StrView = std::string_view;
+    using ExStrView = std::string_view;
 
     inline namespace Concepts
     {
         template<typename AdaptorType>
-        concept StrViewAdaptable = requires( AdaptorType Adaptor, StrView SV ) { Adaptor( SV ); };
+        concept StrViewAdaptable = requires( AdaptorType Adaptor, ExStrView SV ) { Adaptor( SV ); };
     }
 
     template<StrViewAdaptable T>
-    constexpr decltype( auto ) operator|( StrView Input, T&& Adaptor ) noexcept
+    constexpr decltype( auto ) operator|( ExStrView Input, T&& Adaptor ) noexcept
     {
         return std::forward<T>( Adaptor )( Input );
     }
 
     template<StrViewAdaptable T>
-    constexpr StrView& operator|=( StrView& Input, T&& Adaptor ) noexcept
+    constexpr ExStrView& operator|=( ExStrView& Input, T&& Adaptor ) noexcept
     {
         return Input = Input | std::forward<T>( Adaptor );
     }
@@ -41,29 +41,29 @@ namespace EasyString
         return {};
     }
 
-    struct StrViewUnit
+    struct ExStrViewUnit
     {
-        constexpr StrViewUnit( StrView Source ) noexcept : Text{ Source } {}
+        constexpr ExStrViewUnit( ExStrView Source ) noexcept : Text{ Source } {}
 
       protected:
-        StrView Text;
+        ExStrView Text;
     };
 
-    struct StrViewPair
+    struct ExStrViewPair
     {
-        constexpr StrViewPair( StrView LeftSource, StrView RightSource ) noexcept
+        constexpr ExStrViewPair( ExStrView LeftSource, ExStrView RightSource ) noexcept
             : Left{ LeftSource }, Right{ RightSource }
         {}
 
       protected:
-        StrView Left, Right;
+        ExStrView Left, Right;
     };
 
-    constexpr auto Write( StrView Content )
+    constexpr auto Write( ExStrView Content )
     {
-        struct Impl : StrViewUnit
+        struct Impl : ExStrViewUnit
         {
-            auto To( StrView Location ) const
+            auto To( ExStrView Location ) const
             {
                 auto File = std::ofstream( Location.data(), std::ofstream::trunc );
                 auto Output = std::ostreambuf_iterator( File );
@@ -73,11 +73,11 @@ namespace EasyString
         return Impl{ Content };
     }
 
-    constexpr auto Search( StrView Pattern )
+    constexpr auto Search( ExStrView Pattern )
     {
-        struct Impl : StrViewUnit
+        struct Impl : ExStrViewUnit
         {
-            constexpr auto Search_impl( StrView Input ) const
+            constexpr auto Search_impl( ExStrView Input ) const
             {
                 if consteval
                 {
@@ -90,23 +90,23 @@ namespace EasyString
                 }
             }
 
-            constexpr auto In( StrView Input ) const -> StrView
+            constexpr auto In( ExStrView Input ) const -> ExStrView
             {
                 auto MatchBegin = Search_impl( Input );
                 if( MatchBegin == Input.end() ) return { Input.end(), 0 };
                 return { MatchBegin, Text.length() };
             }
 
-            constexpr auto operator()( StrView Source ) const { return In( Source ); }
+            constexpr auto operator()( ExStrView Source ) const { return In( Source ); }
         };
         return Impl{ Pattern };
     }
 
-    consteval auto Trim( StrView ExcludeChars )
+    consteval auto Trim( ExStrView ExcludeChars )
     {
-        struct Impl : StrViewUnit
+        struct Impl : ExStrViewUnit
         {
-            constexpr auto From( StrView Input ) const
+            constexpr auto From( ExStrView Input ) const
             {
                 if( ! Input.empty() )
                 {
@@ -121,27 +121,27 @@ namespace EasyString
                 return Input;
             }
 
-            constexpr auto operator()( StrView Source ) const { return From( Source ); };
+            constexpr auto operator()( ExStrView Source ) const { return From( Source ); };
         };
         return Impl{ ExcludeChars };
     }
 
-    constexpr auto TrimSpace( StrView Input )
+    constexpr auto TrimSpace( ExStrView Input )
     {
         constexpr auto SpaceChar = []( char c ) {
             return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
         };
         return std::all_of( Input.begin(), Input.end(), SpaceChar )
-                   ? StrView{}
-                   : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),
+                   ? ExStrView{}
+                   : ExStrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),
                               std::find_if_not( Input.rbegin(), Input.rend(), SpaceChar ).base() };
     }
 
-    constexpr auto After( StrView Pattern )
+    constexpr auto After( ExStrView Pattern )
     {
-        struct Impl : StrViewUnit
+        struct Impl : ExStrViewUnit
         {
-            constexpr auto operator()( StrView Input ) const -> StrView
+            constexpr auto operator()( ExStrView Input ) const -> ExStrView
             {
                 auto Match = Search( Text ).In( Input );
                 if( Match.begin() == Input.end() ) return { Input.end(), 0 };
@@ -152,11 +152,11 @@ namespace EasyString
         // or just use lambda?
     }
 
-    constexpr auto Before( StrView Pattern )
+    constexpr auto Before( ExStrView Pattern )
     {
-        struct Impl : StrViewUnit
+        struct Impl : ExStrViewUnit
         {
-            constexpr auto operator()( StrView Input ) const -> StrView
+            constexpr auto operator()( ExStrView Input ) const -> ExStrView
             {
                 //if( Text.empty() ) return Input;
                 auto Match = Search( Text ).In( Input );
@@ -167,22 +167,22 @@ namespace EasyString
         return Impl{ Pattern };
     }
 
-    constexpr auto Between( StrView LeftBound, StrView RightBound )
+    constexpr auto Between( ExStrView LeftBound, ExStrView RightBound )
     {
-        struct Impl : StrViewPair
+        struct Impl : ExStrViewPair
         {
-            using StrViewPair::StrViewPair;
-            constexpr auto operator()( StrView Input ) const { return Input | After( Left ) | Before( Right ); }
+            using ExStrViewPair::ExStrViewPair;
+            constexpr auto operator()( ExStrView Input ) const { return Input | After( Left ) | Before( Right ); }
         };
 
         return Impl{ LeftBound, RightBound };
     }
 
-    constexpr auto Count( StrView Pattern )
+    constexpr auto Count( ExStrView Pattern )
     {
-        struct Impl : StrViewUnit
+        struct Impl : ExStrViewUnit
         {
-            constexpr auto In( StrView Input ) const
+            constexpr auto In( ExStrView Input ) const
             {
                 auto Count = 0uz;
                 while( Input.contains( Text ) )
@@ -204,21 +204,21 @@ namespace EasyString
                 // return Count;
             }
 
-            constexpr auto operator()( StrView Input ) const { return In( Input ); }
+            constexpr auto operator()( ExStrView Input ) const { return In( Input ); }
         };
         return Impl{ Pattern };
     }
 
     struct Split_
     {
-        StrView BaseRange;
+        ExStrView BaseRange;
 
         auto By( const char Delimiter ) const
         {
             auto RangeBegin = BaseRange.begin();
             auto RangeEnd = BaseRange.end();
 
-            auto Result = std::vector<StrView>{};
+            auto Result = std::vector<ExStrView>{};
             Result.reserve( static_cast<std::size_t>( std::count( RangeBegin, RangeEnd, Delimiter ) + 1 ) );
 
             while( RangeBegin != RangeEnd )
@@ -237,20 +237,20 @@ namespace EasyString
 
     struct Split
     {
-        StrView BaseRange;
+        ExStrView BaseRange;
 
         struct InternalItorSentinel
         {};
 
         struct InternalItor
         {
-            StrView BaseRange;
+            ExStrView BaseRange;
             const char Delimiter;
 
             auto operator*()
             {
                 auto DelimiterPos = std::find( BaseRange.begin(), BaseRange.end(), Delimiter );
-                return StrView{ BaseRange.begin(), DelimiterPos };
+                return ExStrView{ BaseRange.begin(), DelimiterPos };
             }
 
             auto operator!=( InternalItorSentinel ) { return ! BaseRange.empty(); }
@@ -260,13 +260,13 @@ namespace EasyString
                 if( DelimiterPos == BaseRange.end() )
                     BaseRange.remove_suffix( BaseRange.length() );
                 else
-                    BaseRange = StrView{ DelimiterPos + 1, BaseRange.end() };
+                    BaseRange = ExStrView{ DelimiterPos + 1, BaseRange.end() };
             }
         };
 
         struct InternalRange
         {
-            StrView BaseRange;
+            ExStrView BaseRange;
             const char Delimiter;
 
             auto begin() { return InternalItor{ BaseRange, Delimiter }; }
@@ -283,14 +283,14 @@ namespace EasyString
 
     struct SplitBetween
     {
-        StrView LeftDelimiter, RightDelimiter;
+        ExStrView LeftDelimiter, RightDelimiter;
 
         struct InternalItorSentinel
         {};
 
         struct InternalItor
         {
-            StrView BaseRange, LeftDelimiter, RightDelimiter;
+            ExStrView BaseRange, LeftDelimiter, RightDelimiter;
 
             auto operator*() { return BaseRange | Between( "", RightDelimiter ); }
             auto operator!=( InternalItorSentinel ) { return ! BaseRange.empty(); }
@@ -304,13 +304,13 @@ namespace EasyString
 
         struct InternalRange
         {
-            StrView BaseRange, LeftDelimiter, RightDelimiter;
+            ExStrView BaseRange, LeftDelimiter, RightDelimiter;
 
             auto begin() { return InternalItor{ BaseRange | After( LeftDelimiter ), LeftDelimiter, RightDelimiter }; }
             auto end() { return InternalItorSentinel{}; }
         };
 
-        friend auto operator|( StrView Source, const SplitBetween& Adaptor )
+        friend auto operator|( ExStrView Source, const SplitBetween& Adaptor )
         {
             return InternalRange{ Source, Adaptor.LeftDelimiter, Adaptor.RightDelimiter };
         }
@@ -390,12 +390,12 @@ namespace EasyString
         }
     };
 
-    inline constexpr auto operator+( const std::string& LHS, const StrView& RHS ) -> std::string  //
+    inline constexpr auto operator+( const std::string& LHS, const ExStrView& RHS ) -> std::string  //
     {
         return LHS + std::string{ RHS };
     }
 
-    constexpr auto operator+( const StrView& LHS, const auto& RHS ) -> std::string  //
+    constexpr auto operator+( const ExStrView& LHS, const auto& RHS ) -> std::string  //
     {
         return std::string{ LHS } + RHS;
     }
