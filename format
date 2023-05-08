@@ -5,7 +5,6 @@
 
 //#include <fmt/format.h>
 #include <fmt/core.h>
-
 namespace std
 {
     // The empy lines are for supressing meaningless hinting

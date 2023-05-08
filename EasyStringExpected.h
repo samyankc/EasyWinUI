@@ -59,12 +59,11 @@ namespace EasyString
         return Input = Input | std::forward<T>( Adaptor );
     }
 
-    inline auto LoadFileContent( const char* FileName ) -> std::string
+    inline auto ReadFile( std::string_view FileName ) -> std::optional<std::string>
     {
-        using it_type = std::istreambuf_iterator<char>;
-        std::ifstream Fin( FileName );
-        if( Fin ) return { it_type( Fin ), it_type( /*default_sentinel*/ ) };
-        return {};
+        if( auto Fin = std::ifstream( FileName.data() ) )
+            return std::string{ std::istreambuf_iterator<char>( Fin ), {} };
+        return std::nullopt;
     }
 
     struct ExStrViewUnit
