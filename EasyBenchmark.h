@@ -5,7 +5,7 @@
 #define EASYBENCHMARK_H
 
 #include <chrono>
-#include <format>
+#include <print.h>
 #include <vector>
 #include <algorithm>
 
