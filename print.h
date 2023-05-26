@@ -1,31 +1,27 @@
 //#define FMT_HEADER_ONLY
 
-#ifndef NON_STANDARD_FORMAT_H_
-#define NON_STANDARD_FORMAT_H_
+#ifndef NON_STANDARD_PRINT_H_
+#define NON_STANDARD_PRINT_H_
 
-//#include <fmt/format.h>
-#include <fmt/core.h>
+#include <format>
+#include <iostream>
+
 namespace std
 {
-    // The empy lines are for supressing meaningless hinting
-
-    // NOLINTBEGIN
-
-    //
-    using fmt::print;
-
-    //
     template<typename... T>
-    FMT_INLINE void println( fmt::format_string<T...> fmt, T&&... Args )
+    constexpr void print( std::format_string<T...> fmt, T&&... Args )
     {
-        fmt::print( fmt, std::forward<T>( Args )... );
-        fmt::print( "\n" );
+        std2::print(fmt, std::forward<T>( Args )...);
+        //std::format_to( std::ostreambuf_iterator( std::cout ), fmt, std::forward<T>( Args )... );
     }
 
-    //
-    using fmt::format;
+    template<typename... T>
+    constexpr void println( std::format_string<T...> fmt, T&&... Args )
+    {
+        std2::print( fmt, Args... );
+        std2::print( "\n" );
+    }
 
-    // NOLINTEND
 }  // namespace std
 
 #endif

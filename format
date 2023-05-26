@@ -5,11 +5,26 @@
 
 //#include <fmt/format.h>
 #include <fmt/core.h>
+
+// The empy lines are for supressing meaningless hinting
+
+// NOLINTBEGIN
+
+namespace std
+{
+
+    //
+    using fmt::format_string;
+
+    //
+    using fmt::format;
+
+    //
+    using fmt::format_to;
+}
+
 namespace std2
 {
-    // The empy lines are for supressing meaningless hinting
-
-    // NOLINTBEGIN
 
     //
     using fmt::print;
@@ -25,7 +40,7 @@ namespace std2
     //
     using fmt::format;
 
-    // NOLINTEND
-}  // namespace std
+}  // namespace std2
 
+// NOLINTEND
 #endif
