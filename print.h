@@ -3,8 +3,9 @@
 #ifndef NON_STANDARD_PRINT_H_
 #define NON_STANDARD_PRINT_H_
 
+//#include <format>
+//#include <iostream>
 #include <fmt/core.h>
-// #include <iostream>
 
 namespace std
 {
@@ -12,7 +13,7 @@ namespace std
     constexpr void print( fmt::format_string<T...> fmt, T&&... Args )
     {
         fmt::print( fmt, std::forward<T>( Args )... );
-        // fmt::format_to( std::ostreambuf_iterator( std::cout ), fmt, std::forward<T>( Args )... );
+        //fmt::format_to( std::ostreambuf_iterator( std::cout ), fmt, std::forward<T>( Args )... );
     }
 
     template<typename... T>
