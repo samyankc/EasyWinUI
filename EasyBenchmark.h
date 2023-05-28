@@ -63,7 +63,7 @@ namespace EasyBenchmark
                   StartTimeMark{ Clock::now() },                   //
                   RemainIteration{ MaxIteration }
             {
-                std::print( "Benchmarking... {}\n", Result.Title );
+                std::println( "Benchmarking... {}", Result.Title );
             }
 
             ~Iterator()
@@ -97,18 +97,18 @@ namespace EasyBenchmark
                 std::ranges::max_element( Samples, {}, &BenchmarkResult::TitleLength )->TitleLength(), HeaderSpace );
             const auto ThroughputBaseline = Samples[BaselinePos].Throughput();
 
-            auto PrintLine = [=] { std::print( ">{:─<{}}<\n", "", TitleWidth + DigitWidth * 3 + 4 ); };
+            auto PrintLine = [=] { std::println( ">{:─<{}}<", "", TitleWidth + DigitWidth * 3 + 4 ); };
             auto PrintRow = [=]( std::string_view Title,                                           //
                                  const auto Latency, const auto Throughput, const auto Relative )  //
             {
-                std::print( "   {0:{1}}{2:>{5}}{3:>{5}}{4:>{5}}\n",  //
-                            Title, TitleWidth, Latency, Throughput, Relative, DigitWidth );
+                std::println( "   {0:{1}}{2:>{5}}{3:>{5}}{4:>{5}}",  //
+                              Title, TitleWidth, Latency, Throughput, Relative, DigitWidth );
             };
 
-            std::print(
+            std::println(
                 "\n┌{0:─^{2}}┐"  //
                 "\n│{1: ^{2}}│"  //
-                "\n└{0:─^{2}}┘\n",
+                "\n└{0:─^{2}}┘",
                 "", Header, HeaderSpace );
             PrintRow( "", "Latency", "Throughput", "Relative %" );
             PrintLine();
