@@ -9,19 +9,23 @@
 
 namespace std
 {
-    template<typename... T>
-    constexpr void print( fmt::format_string<T...> fmt, T&&... Args )
-    {
-        fmt::print( fmt, std::forward<T>( Args )... );
-        //fmt::format_to( std::ostreambuf_iterator( std::cout ), fmt, std::forward<T>( Args )... );
-    }
 
-    template<typename... T>
-    constexpr void println( fmt::format_string<T...> fmt, T&&... Args )
-    {
-        std::print( fmt, Args... );
-        std::print( "\n" );
-    }
+    using fmt::print;
+    using fmt::println;
+
+    // template<typename... T>
+    // constexpr void print( fmt::format_string<T...> fmt, T&&... Args )
+    // {
+    //     fmt::print( fmt, std::forward<T>( Args )... );
+    //     //fmt::format_to( std::ostreambuf_iterator( std::cout ), fmt, std::forward<T>( Args )... );
+    // }
+
+    // template<typename... T>
+    // constexpr void println( fmt::format_string<T...> fmt, T&&... Args )
+    // {
+    //     std::print( fmt, Args... );
+    //     std::print( "\n" );
+    // }
 
 }  // namespace std
 
