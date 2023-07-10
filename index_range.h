@@ -71,7 +71,7 @@ namespace index_range {
     struct Range : RangeTemplate<Iter>
     {
         constexpr Range( T first, T last ) : RangeTemplate<Iter>( Iter{ first }, Iter{ last + 1 } ) {}
-        constexpr Range( T distance ) : Range( 0, distance - 1 ) {}
+        constexpr Range( T distance ) : Range( T{0}, distance - 1 ) {}
     };
 
     struct Reverse
