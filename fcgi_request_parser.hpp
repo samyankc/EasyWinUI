@@ -31,40 +31,23 @@ namespace FCGI
         struct ReuqestMethod
         {
             enum class VerbType { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH } Verb;
+
             using enum VerbType;
-            // inline const static auto StrViewToVerb = std::map<std::string_view, VerbType>{
-                constexpr static auto StrViewToVerb = BijectiveMap<std::string_view, VerbType>::Init<
-                { "GET", GET },         { "DELETE", DELETE }, { "TRACE", TRACE }, { "POST", POST },
-                { "CONNECT", CONNECT }, { "HEAD", HEAD },     { "PUT", PUT },     { "OPTIONS", OPTIONS },
-                { "PATCH", PATCH },     { "", INVALID }
-                >();
-            // };
+            inline const static auto StrViewToVerb = BijectiveMap<std::string_view, VerbType>  //
+                {                                                                              //
+                  { "GET", GET },  { "POST", POST },    { "CONNECT", CONNECT }, { "TRACE", TRACE },
+                  { "PUT", PUT },  { "HEAD", HEAD },    { "OPTIONS", OPTIONS }, { "PATCH", PATCH },
+                  { "", INVALID }, { "DELETE", DELETE }
+                };
+
+            inline const static auto VerbToStrView = StrViewToVerb.Inverse();
 
             ReuqestMethod() = default;
             ReuqestMethod( const ReuqestMethod& ) = default;
             ReuqestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
-            ReuqestMethod( std::convertible_to<std::string_view> auto VerbName )
-                // : Verb{ StrViewToVerb.contains( VerbName ) ? StrViewToVerb.at( VerbName ) : INVALID }
-                : Verb{ StrViewToVerb[VerbName] }
-            {}
+            ReuqestMethod( std::convertible_to<std::string_view> auto VerbName ) : Verb{ StrViewToVerb[VerbName] } {}
 
-            constexpr operator std::string_view() const
-            {
-                using enum VerbType;
-                switch( Verb )
-                {
-                    default : return "INVALID";
-                    case GET : return "GET";
-                    case HEAD : return "HEAD";
-                    case POST : return "POST";
-                    case PUT : return "PUT";
-                    case DELETE : return "DELETE";
-                    case CONNECT : return "CONNECT";
-                    case OPTIONS : return "OPTIONS";
-                    case TRACE : return "TRACE";
-                    case PATCH : return "PATCH";
-                }
-            }
+            constexpr operator std::string_view() const { return VerbToStrView[Verb]; }
 
             constexpr operator VerbType() const { return Verb; }
         };

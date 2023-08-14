@@ -1,13 +1,22 @@
 #ifndef H_BIJECTIVE_MAP_
 #define H_BIJECTIVE_MAP_
 
-#include <array>
+#include <vector>
 #include <utility>
 #include <algorithm>
 
-template<typename KeyType, typename ValueType, std::size_t N = 0>
-struct BijectiveMap : std::array<std::pair<KeyType, ValueType>, N>
+template<typename KeyType, typename ValueType>
+struct BijectiveMap : std::vector<std::pair<KeyType, ValueType>>
 {
+    using PairType = std::pair<KeyType, ValueType>;
+
+    constexpr auto contains( const KeyType& TargetKey ) const
+    {
+        for( auto&& Node : *this )
+            if( Node.first == TargetKey ) return true;
+        return false;
+    }
+
     constexpr auto operator[]( const KeyType& TargetKey ) const
     {
         for( auto&& Node : *this )
@@ -17,23 +26,16 @@ struct BijectiveMap : std::array<std::pair<KeyType, ValueType>, N>
 
     constexpr auto Inverse() const
     {
-        auto InverseMap = BijectiveMap<ValueType, KeyType, N>{};
-        std::transform( this->begin(), this->end(), InverseMap.begin(), []( auto& Node ) {
-            return std::pair<ValueType, KeyType>{ Node.second, Node.first };
-        } );
+        auto InverseMap = BijectiveMap<ValueType, KeyType>{};
+        InverseMap.reserve( this->size() );
+        for( auto&& Node : *this ) InverseMap.emplace_back( Node.second, Node.first );
         return InverseMap;
     }
-};
 
-template<typename KeyType, typename ValueType>
-struct BijectiveMap<KeyType, ValueType, 0>
-{
-    using PairType = std::pair<KeyType, ValueType>;
-
-    template<PairType... Nodes>
-    constexpr static auto Init()
+    constexpr BijectiveMap( std::initializer_list<PairType> L )
     {
-        return BijectiveMap<KeyType, ValueType, sizeof...( Nodes )>{ Nodes... };
+        this->reserve( L.size() );
+        for( auto&& Node : L ) this->push_back( Node );
     }
 };
 
