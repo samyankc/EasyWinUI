@@ -31,7 +31,10 @@ struct BijectiveMap<KeyType, ValueType, 0>
     using PairType = std::pair<KeyType, ValueType>;
 
     template<PairType... Nodes>
-    constexpr static auto Init = BijectiveMap<KeyType, ValueType, sizeof...( Nodes )>{ Nodes... };
+    constexpr static auto Init()
+    {
+        return BijectiveMap<KeyType, ValueType, sizeof...( Nodes )>{ Nodes... };
+    }
 };
 
 #endif

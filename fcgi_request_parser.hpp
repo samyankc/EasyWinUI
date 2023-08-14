@@ -2,6 +2,7 @@
 #define H_FCGI_REQUEST_PARSER_
 
 #include "string_split.hpp"
+#include "BijectiveMap.hpp"
 #include <fcgi_stdio.h>
 #include <string>
 #include <string_view>
@@ -31,17 +32,20 @@ namespace FCGI
         {
             enum class VerbType { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH } Verb;
             using enum VerbType;
-            inline const static auto StrViewToVerb =
-                std::map<std::string_view, VerbType>{ { "GET", GET },   { "DELETE", DELETE },   { "TRACE", TRACE },
-                                                      { "POST", POST }, { "CONNECT", CONNECT }, { "HEAD", HEAD },
-                                                      { "PUT", PUT },   { "OPTIONS", OPTIONS }, { "PATCH", PATCH },
-                                                      { "", INVALID } };
+            // inline const static auto StrViewToVerb = std::map<std::string_view, VerbType>{
+                constexpr static auto StrViewToVerb = BijectiveMap<std::string_view, VerbType>::Init<
+                { "GET", GET },         { "DELETE", DELETE }, { "TRACE", TRACE }, { "POST", POST },
+                { "CONNECT", CONNECT }, { "HEAD", HEAD },     { "PUT", PUT },     { "OPTIONS", OPTIONS },
+                { "PATCH", PATCH },     { "", INVALID }
+                >();
+            // };
 
             ReuqestMethod() = default;
             ReuqestMethod( const ReuqestMethod& ) = default;
             ReuqestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
-            ReuqestMethod( std::same_as<std::string_view> auto VerbName )
-                : Verb{ StrViewToVerb.contains( VerbName ) ? StrViewToVerb.at( VerbName ) : INVALID }
+            ReuqestMethod( std::convertible_to<std::string_view> auto VerbName )
+                // : Verb{ StrViewToVerb.contains( VerbName ) ? StrViewToVerb.at( VerbName ) : INVALID }
+                : Verb{ StrViewToVerb[VerbName] }
             {}
 
             constexpr operator std::string_view() const
