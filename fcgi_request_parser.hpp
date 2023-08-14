@@ -40,7 +40,7 @@ namespace FCGI
             ReuqestMethod() = default;
             ReuqestMethod( const ReuqestMethod& ) = default;
             ReuqestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
-            ReuqestMethod( std::convertible_to<std::string_view> auto VerbName )
+            ReuqestMethod( std::same_as<std::string_view> auto VerbName )
                 : Verb{ StrViewToVerb.contains( VerbName ) ? StrViewToVerb.at( VerbName ) : INVALID }
             {}
 
