@@ -11,7 +11,8 @@
 #include <mutex>
 #include <thread>
 #include <map>
-#include <print.h>
+#include <format>
+#include <iostream>
 
 namespace Debug
 {
@@ -90,14 +91,15 @@ namespace Debug
     {
         constexpr auto PrintMessage( std::string_view msg ) const
         {
-            std::print( "[ {} @ {} ] | {}\n", TypeName<T>, static_cast<const void*>( this ), msg );
+            std::cout << std::format( "[ {} @ {} ] | {}\n", TypeName<T>, static_cast<const void*>( this ), msg );
         }
 
         constexpr Noisy() { PrintMessage( "Default Ctor" ); }
         constexpr Noisy( const Noisy& ) { PrintMessage( "Copy Ctor" ); }
         constexpr Noisy( Noisy&& ) { PrintMessage( "Move Ctor" ); }
         constexpr ~Noisy() requires( ( SilentFlag & Silent::Dtor ) ) { PrintMessage( "Dtor" ); }
-        constexpr ~Noisy() requires( ! ( SilentFlag & Silent::Dtor ) ) = default;
+        constexpr ~Noisy() requires( ! ( SilentFlag & Silent::Dtor ) )
+        = default;
     };
 }  // namespace Debug
 #endif
