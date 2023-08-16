@@ -1,11 +1,10 @@
 #ifndef H_FCGI_REQUEST_PARSER_
 #define H_FCGI_REQUEST_PARSER_
 
-#include "string_split.hpp"
+// #include "string_split.hpp"
 #include "BijectiveMap.hpp"
+#include "EasyString.h"
 #include <fcgi_stdio.h>
-#include <string>
-#include <string_view>
 #include <algorithm>
 #include <vector>
 #include <array>
@@ -14,13 +13,18 @@
 
 namespace FCGI
 {
+    using namespace EasyString;
+
     inline auto MapQueryString( std::string_view Source )
     {
         auto Result = std::map<std::string_view, std::string_view>{};
 
         for( auto Segment : Split( Source ).By( '&' ) )
         {
-            auto [Key, Value] = Split( Segment ).By( '=' ) | Take<2>;
+            // auto [Key, Value] = Split( Segment ).By( '=' ) | Take<2>;
+            auto Pair = Split( Segment ).By( '=' );
+            auto Key = Pair.first();
+            auto Value = Pair.second();
             Result[Key] = Value;
         }
         return Result;
@@ -67,7 +71,7 @@ namespace FCGI
         auto Read( std::string_view ParamName )
         {
             auto LoadParamFromEnv = getenv( std::string{ ParamName }.c_str() );
-            return std::string_view{ LoadParamFromEnv?LoadParamFromEnv:"No Content" };
+            return std::string_view{ LoadParamFromEnv ? LoadParamFromEnv : "No Content" };
         }
     };
 
