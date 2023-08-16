@@ -14,7 +14,7 @@
 
 namespace FCGI
 {
-    auto MapQueryString( std::string_view Source )
+    inline auto MapQueryString( std::string_view Source )
     {
         auto Result = std::map<std::string_view, std::string_view>{};
 
@@ -66,11 +66,12 @@ namespace FCGI
 
         auto Read( std::string_view ParamName )
         {
-            return std::string_view{ getenv( std::string{ ParamName }.c_str() ) };
+            auto LoadParamFromEnv = getenv( std::string{ ParamName }.c_str() );
+            return std::string_view{ LoadParamFromEnv?LoadParamFromEnv:"No Content" };
         }
     };
 
-    auto NextRequest()
+    inline auto NextRequest()
     {
         auto R = Request{};
         R.ContentLength = std::atoi( getenv( "CONTENT_LENGTH" ) );

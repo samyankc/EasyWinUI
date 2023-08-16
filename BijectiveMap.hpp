@@ -17,11 +17,18 @@ struct BijectiveMap : std::vector<std::pair<KeyType, ValueType>>
         return false;
     }
 
-    constexpr auto operator[]( const KeyType& TargetKey ) const
+    constexpr auto operator[]( const KeyType& TargetKey ) const&
     {
         for( auto&& Node : *this )
             if( Node.first == TargetKey ) return Node.second;
         return ValueType{};
+    }
+
+    constexpr auto& operator[]( const KeyType& TargetKey ) &
+    {
+        for( auto&& Node : *this )
+            if( Node.first == TargetKey ) return Node.second;
+        return this->emplace_back( TargetKey, {} );
     }
 
     constexpr auto Inverse() const
