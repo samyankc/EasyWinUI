@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <utility>
-#include <algorithm>
 
 template<typename KeyType, typename ValueType>
 struct BijectiveMap : std::vector<std::pair<KeyType, ValueType>>
@@ -28,7 +27,7 @@ struct BijectiveMap : std::vector<std::pair<KeyType, ValueType>>
     {
         for( auto&& Node : *this )
             if( Node.first == TargetKey ) return Node.second;
-        return this->emplace_back( TargetKey, {} );
+        return this->emplace_back( TargetKey, ValueType{} ).second;
     }
 
     constexpr auto Inverse() const

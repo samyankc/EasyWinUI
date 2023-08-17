@@ -5,11 +5,6 @@
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
 #include <fcgi_stdio.h>
-#include <algorithm>
-#include <vector>
-#include <array>
-#include <optional>
-#include <map>
 
 namespace FCGI
 {
@@ -17,14 +12,11 @@ namespace FCGI
 
     inline auto MapQueryString( std::string_view Source )
     {
-        auto Result = std::map<std::string_view, std::string_view>{};
+        auto Result = BijectiveMap<std::string_view, std::string_view>{};
 
-        for( auto Segment : Split( Source ).By( '&' ) )
+        for( auto Segment : Split::Lazy( Source ).By( '&' ) )
         {
-            // auto [Key, Value] = Split( Segment ).By( '=' ) | Take<2>;
-            auto Pair = Split( Segment ).By( '=' );
-            auto Key = Pair.first();
-            auto Value = Pair.second();
+            auto [Key, Value] = Split::Eager( Segment ).By( '=' ) | Bundle<2>;
             Result[Key] = Value;
         }
         return Result;
@@ -66,7 +58,7 @@ namespace FCGI
         std::string_view ScriptName;
         std::string_view RequestURI;
         std::string QueryStringCache;
-        std::map<std::string_view, std::string_view> QueryString;
+        BijectiveMap<std::string_view, std::string_view> QueryString;
 
         auto Read( std::string_view ParamName )
         {

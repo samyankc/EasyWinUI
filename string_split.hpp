@@ -34,14 +34,14 @@ struct Split
 };
 
 template<size_t N>
-struct Taker
+struct ArrayTransform
 {};
 
 template<size_t N>
-constexpr auto Take = Taker<N>{};
+constexpr auto ToArray = ArrayTransform<N>{};
 
 template<size_t N>
-auto operator|( const auto& Container, Taker<N> )
+auto operator|( const auto& Container, ArrayTransform<N> )
 {
     return [&]<size_t... Is>( std::index_sequence<Is...> ) {
         return std::array{ Container[Is]... };

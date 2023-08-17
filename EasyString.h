@@ -216,14 +216,12 @@ namespace EasyString
         return Impl{ Pattern };
     }
 
-    struct Split_Eager
+    struct Split_Eager : StrViewUnit
     {
-        StrView BaseRange;
-
         auto By( const char Delimiter ) const
         {
-            auto RangeBegin = BaseRange.begin();
-            auto RangeEnd = BaseRange.end();
+            auto RangeBegin = Text.begin();
+            auto RangeEnd = Text.end();
 
             auto Result = std::vector<StrView>{};
             Result.reserve( static_cast<std::size_t>( std::count( RangeBegin, RangeEnd, Delimiter ) + 1 ) );
@@ -242,7 +240,7 @@ namespace EasyString
         }
     };
 
-    struct Split : StrViewUnit
+    struct Split_Lazy : StrViewUnit
     {
         struct InternalItorSentinel
         {};
@@ -280,13 +278,37 @@ namespace EasyString
                 return ! Text.ends_with( Delimiter )  // ending delim adjustment
                        + std::count( Text.begin(), Text.end(), Delimiter );
             }
-
-            constexpr auto first() const { return *begin(); }
-            constexpr auto second() const { return *++begin(); }
         };
 
         constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
     };
+
+    struct Eager
+    {
+        using Split = Split_Eager;
+    };
+
+    struct Lazy
+    {
+        using Split = Split_Lazy;
+    };
+
+    struct Split
+    {
+        using Eager = Eager::Split;
+        using Lazy = Lazy::Split;
+    };
+
+    template<size_t N>
+    constexpr auto Bundle = std::in_place_index<N>;
+
+    template<size_t N>
+    auto operator|( const auto& Container, std::in_place_index_t<N> )
+    {
+        return [&]<size_t... Is>( std::index_sequence<Is...> ) {
+            return std::array{ Container[Is]... };
+        }( std::make_index_sequence<N>() );
+    }
 
     struct SplitBetween
     {
