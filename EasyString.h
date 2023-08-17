@@ -295,8 +295,8 @@ namespace EasyString
 
     struct Split
     {
-        using Eager = Eager::Split;
-        using Lazy = Lazy::Split;
+        using Eager = Split_Eager;
+        using Lazy = Split_Lazy;
     };
 
     template<size_t N>
