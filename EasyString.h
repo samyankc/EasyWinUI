@@ -41,7 +41,7 @@ namespace EasyString
 
     struct StrViewUnit
     {
-        constexpr StrViewUnit( StrView Source ) noexcept : Text{ Source } {}
+        constexpr StrViewUnit( std::convertible_to<StrView> auto Source ) noexcept : Text{ Source } {}
 
       protected:
         StrView Text;
@@ -49,7 +49,8 @@ namespace EasyString
 
     struct StrViewPair
     {
-        constexpr StrViewPair( StrView LeftSource, StrView RightSource ) noexcept
+        constexpr StrViewPair( std::convertible_to<StrView> auto LeftSource,
+                               std::convertible_to<StrView> auto RightSource ) noexcept
             : Left{ LeftSource }, Right{ RightSource }
         {}
 
