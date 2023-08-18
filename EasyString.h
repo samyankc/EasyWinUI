@@ -17,6 +17,9 @@ namespace EasyString
     {
         template<typename AdaptorType>
         concept StrViewAdaptable = requires( AdaptorType Adaptor, StrView SV ) { Adaptor( SV ); };
+
+        template<typename T>
+        concept StrViewConvertible = std::convertible_to<T, StrView>;
     }
 
     template<StrViewAdaptable T>
@@ -41,7 +44,7 @@ namespace EasyString
 
     struct StrViewUnit
     {
-        constexpr StrViewUnit( std::convertible_to<StrView> auto Source ) noexcept : Text{ Source } {}
+        constexpr StrViewUnit( StrViewConvertible auto Source ) noexcept : Text{ Source } {}
 
       protected:
         StrView Text;
@@ -49,8 +52,8 @@ namespace EasyString
 
     struct StrViewPair
     {
-        constexpr StrViewPair( std::convertible_to<StrView> auto LeftSource,
-                               std::convertible_to<StrView> auto RightSource ) noexcept
+        constexpr StrViewPair( StrViewConvertible auto LeftSource,
+                               StrViewConvertible auto RightSource ) noexcept
             : Left{ LeftSource }, Right{ RightSource }
         {}
 
