@@ -14,11 +14,10 @@ namespace FCGI
     {
         auto Result = BijectiveMap<std::string_view, std::string_view>{};
 
-        for( auto Segment : Split::Lazy( Source ).By( '&' ) )
-        {
-            auto [Key, Value] = Split::Eager( Segment ).By( '=' ) | Bundle<2>;
-            Result[Key] = Value;
-        }
+        for( auto Segment : Source | SplitBy( '&' ) )                        //
+            for( auto [Key, Value] : Segment | SplitBy( '=' ) | Bundle<2> )  //
+                Result[Key] = Value;
+
         return Result;
     }
 
