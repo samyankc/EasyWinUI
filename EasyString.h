@@ -11,6 +11,8 @@
 
 namespace EasyString
 {
+    using namespace std::string_literals;
+    using namespace std::string_view_literals;
     using StrView = std::string_view;
 
     inline namespace Concepts
@@ -52,8 +54,7 @@ namespace EasyString
 
     struct StrViewPair
     {
-        constexpr StrViewPair( StrViewConvertible auto LeftSource,
-                               StrViewConvertible auto RightSource ) noexcept
+        constexpr StrViewPair( StrViewConvertible auto LeftSource, StrViewConvertible auto RightSource ) noexcept
             : Left{ LeftSource }, Right{ RightSource }
         {}
 
@@ -79,6 +80,7 @@ namespace EasyString
     {
         struct Impl : StrViewUnit
         {
+          protected:
             constexpr auto Search_impl( StrView Input ) const
             {
                 if consteval
@@ -92,6 +94,7 @@ namespace EasyString
                 }
             }
 
+          public:
             constexpr auto In( StrView Input ) const -> StrView
             {
                 auto MatchBegin = Search_impl( Input );
@@ -144,49 +147,23 @@ namespace EasyString
 
     constexpr auto After( StrView Pattern )
     {
-        struct Impl : StrViewUnit
-        {
-            constexpr auto operator()( StrView Input ) const -> StrView
-            {
-                return { Search( Text ).In( Input ).end(), Input.end() };
-
-                auto Match = Search( Text ).In( Input );
-                if( Match.begin() == Input.end() )
-                    return { Input.end(), 0 };
-                else
-                    return { Match.end(), Input.end() };
-            }
-        };
-        return Impl{ Pattern };
-        // or just use lambda?
+        return [=]( StrView Input ) -> StrView { return { Search( Pattern ).In( Input ).end(), Input.end() }; };
     }
 
     constexpr auto Before( StrView Pattern )
     {
-        struct Impl : StrViewUnit
-        {
-            constexpr auto operator()( StrView Input ) const -> StrView
-            {
-                //if( Text.empty() ) return Input;
-                auto Match = Search( Text ).In( Input );
-                if( Match.begin() == Input.end() )
-                    return { Input.end(), 0 };
-                else
-                    return { Input.begin(), Match.begin() };
-            }
+        return [=]( StrView Input ) -> StrView {
+            auto Match = Search( Pattern ).In( Input );
+            if( Match.begin() == Input.end() )
+                return { Input.end(), 0 };
+            else
+                return { Input.begin(), Match.begin() };
         };
-        return Impl{ Pattern };
     }
 
     constexpr auto Between( StrView LeftBound, StrView RightBound )
     {
-        struct Impl : StrViewPair
-        {
-            using StrViewPair::StrViewPair;
-            constexpr auto operator()( StrView Input ) const { return Input | After( Left ) | Before( Right ); }
-        };
-
-        return Impl{ LeftBound, RightBound };
+        return [=]( StrView Input ) -> StrView { return Input | After( LeftBound ) | Before( RightBound ); };
     }
 
     constexpr auto Count( StrView Pattern )
@@ -220,88 +197,199 @@ namespace EasyString
         return Impl{ Pattern };
     }
 
-    struct Split_Eager : StrViewUnit
+    constexpr auto Split( StrView Pattern )
     {
-        auto By( const char Delimiter ) const
+        struct Impl : StrViewUnit
         {
-            auto RangeBegin = Text.begin();
-            auto RangeEnd = Text.end();
+            struct InternalItorSentinel
+            {};
 
-            auto Result = std::vector<StrView>{};
-            Result.reserve( static_cast<std::size_t>( std::count( RangeBegin, RangeEnd, Delimiter ) + 1 ) );
-
-            while( RangeBegin != RangeEnd )
+            struct InternalItor : StrViewUnit
             {
-                auto DelimiterPos = std::find( RangeBegin, RangeEnd, Delimiter );
-                Result.emplace_back( RangeBegin, DelimiterPos );
-                if( DelimiterPos == RangeEnd )
-                    RangeBegin = RangeEnd;
-                else
-                    RangeBegin = DelimiterPos + 1;
-            }
+                const char Delimiter;
 
-            return Result;
+                constexpr auto operator*() const
+                {
+                    auto DelimiterPos = std::find( Text.begin(), Text.end(), Delimiter );
+                    return StrView{ Text.begin(), DelimiterPos };
+                }
+
+                constexpr auto operator!=( InternalItorSentinel ) const { return ! Text.empty(); }
+                constexpr auto& operator++()
+                {
+                    auto DelimiterPos = std::find( Text.begin(), Text.end(), Delimiter );
+                    if( DelimiterPos == Text.end() )
+                        Text.remove_suffix( Text.length() );
+                    else
+                        Text = StrView{ DelimiterPos + 1, Text.end() };
+                    return *this;
+                }
+                constexpr auto operator++( int )
+                {
+                    auto CacheIt = *this;
+                    this->operator++();
+                    return CacheIt;
+                }
+            };
+
+            struct InternalRange : StrViewUnit
+            {
+                const char Delimiter;
+
+                constexpr auto begin() const { return InternalItor{ Text, Delimiter }; }
+                constexpr auto end() const { return InternalItorSentinel{}; }
+                constexpr auto size() const
+                {
+                    return ! Text.ends_with( Delimiter )  // ending delim adjustment
+                           + std::count( Text.begin(), Text.end(), Delimiter );
+                }
+            };
+
+            constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
+        };
+
+        return Impl{ Pattern };
+    }
+
+    constexpr auto SplitBy( char Delimiter )
+    {
+        return [=]( StrView Pattern ) { return Split( Pattern ).By( Delimiter ); };
+    }
+
+    namespace Lagacy
+    {
+
+        constexpr auto After( StrView Pattern )
+        {
+            struct Impl : StrViewUnit
+            {
+                constexpr auto operator()( StrView Input ) const -> StrView
+                {
+                    return { Search( Text ).In( Input ).end(), Input.end() };
+
+                    auto Match = Search( Text ).In( Input );
+                    if( Match.begin() == Input.end() )
+                        return { Input.end(), 0 };
+                    else
+                        return { Match.end(), Input.end() };
+                }
+            };
+            return Impl{ Pattern };
+            // or just use lambda?
         }
-    };
 
-    struct Split_Lazy : StrViewUnit
-    {
-        struct InternalItorSentinel
-        {};
-
-        struct InternalItor : StrViewUnit
+        constexpr auto Before( StrView Pattern )
         {
-            const char Delimiter;
-
-            constexpr auto operator*() const
+            struct Impl : StrViewUnit
             {
-                auto DelimiterPos = std::find( Text.begin(), Text.end(), Delimiter );
-                return StrView{ Text.begin(), DelimiterPos };
-            }
+                constexpr auto operator()( StrView Input ) const -> StrView
+                {
+                    //if( Text.empty() ) return Input;
+                    auto Match = Search( Text ).In( Input );
+                    if( Match.begin() == Input.end() )
+                        return { Input.end(), 0 };
+                    else
+                        return { Input.begin(), Match.begin() };
+                }
+            };
+            return Impl{ Pattern };
+        }
 
-            constexpr auto operator!=( InternalItorSentinel ) const { return ! Text.empty(); }
-            constexpr auto operator++()
+        constexpr auto Between( StrView LeftBound, StrView RightBound )
+        {
+            struct Impl : StrViewPair
             {
-                auto DelimiterPos = std::find( Text.begin(), Text.end(), Delimiter );
-                if( DelimiterPos == Text.end() )
-                    Text.remove_suffix( Text.length() );
-                else
-                    Text = StrView{ DelimiterPos + 1, Text.end() };
-                return *this;
+                using StrViewPair::StrViewPair;
+                constexpr auto operator()( StrView Input ) const { return Input | After( Left ) | Before( Right ); }
+            };
+
+            return Impl{ LeftBound, RightBound };
+        }
+
+        struct Split_Eager : StrViewUnit
+        {
+            auto By( const char Delimiter ) const
+            {
+                auto RangeBegin = Text.begin();
+                auto RangeEnd = Text.end();
+
+                auto Result = std::vector<StrView>{};
+                Result.reserve( static_cast<std::size_t>( std::count( RangeBegin, RangeEnd, Delimiter ) + 1 ) );
+
+                while( RangeBegin != RangeEnd )
+                {
+                    auto DelimiterPos = std::find( RangeBegin, RangeEnd, Delimiter );
+                    Result.emplace_back( RangeBegin, DelimiterPos );
+                    if( DelimiterPos == RangeEnd )
+                        RangeBegin = RangeEnd;
+                    else
+                        RangeBegin = DelimiterPos + 1;
+                }
+
+                return Result;
             }
         };
 
-        struct InternalRange : StrViewUnit
+        struct Split_Lazy : StrViewUnit
         {
-            const char Delimiter;
+            struct InternalItorSentinel
+            {};
 
-            constexpr auto begin() const { return InternalItor{ Text, Delimiter }; }
-            constexpr auto end() const { return InternalItorSentinel{}; }
-            constexpr auto size() const
+            struct InternalItor : StrViewUnit
             {
-                return ! Text.ends_with( Delimiter )  // ending delim adjustment
-                       + std::count( Text.begin(), Text.end(), Delimiter );
-            }
+                const char Delimiter;
+
+                constexpr auto operator*() const
+                {
+                    auto DelimiterPos = std::find( Text.begin(), Text.end(), Delimiter );
+                    return StrView{ Text.begin(), DelimiterPos };
+                }
+
+                constexpr auto operator!=( InternalItorSentinel ) const { return ! Text.empty(); }
+                constexpr auto operator++()
+                {
+                    auto DelimiterPos = std::find( Text.begin(), Text.end(), Delimiter );
+                    if( DelimiterPos == Text.end() )
+                        Text.remove_suffix( Text.length() );
+                    else
+                        Text = StrView{ DelimiterPos + 1, Text.end() };
+                    return *this;
+                }
+            };
+
+            struct InternalRange : StrViewUnit
+            {
+                const char Delimiter;
+
+                constexpr auto begin() const { return InternalItor{ Text, Delimiter }; }
+                constexpr auto end() const { return InternalItorSentinel{}; }
+                constexpr auto size() const
+                {
+                    return ! Text.ends_with( Delimiter )  // ending delim adjustment
+                           + std::count( Text.begin(), Text.end(), Delimiter );
+                }
+            };
+
+            constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
         };
 
-        constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
-    };
+        struct Eager
+        {
+            using Split = Split_Eager;
+        };
 
-    struct Eager
-    {
-        using Split = Split_Eager;
-    };
+        struct Lazy
+        {
+            using Split = Split_Lazy;
+        };
 
-    struct Lazy
-    {
-        using Split = Split_Lazy;
-    };
+        struct Split
+        {
+            using Eager = Split_Eager;
+            using Lazy = Split_Lazy;
+        };
 
-    struct Split
-    {
-        using Eager = Split_Eager;
-        using Lazy = Split_Lazy;
-    };
+    }  // namespace Lagacy
 
     template<size_t N>
     constexpr auto Bundle = std::in_place_index<N>;
@@ -309,9 +397,12 @@ namespace EasyString
     template<size_t N>
     auto operator|( const auto& Container, std::in_place_index_t<N> )
     {
-        return [&]<size_t... Is>( std::index_sequence<Is...> ) {
-            return std::array{ Container[Is]... };
-        }( std::make_index_sequence<N>() );
+        // return [&]<size_t... Is>( std::index_sequence<Is...> ) {return std::array{ Container[Is]... };}( std::make_index_sequence<N>() );
+        using ValueType = std::decay_t<decltype( *Container.begin() )>;
+        auto Result = std::array<ValueType, N>{};
+        auto It = Container.begin();
+        for( auto i = size_t{ 0 }; i < N; ++i ) Result[i] = *It++;
+        return std::array<std::array<ValueType, N>, 1>{ Result };
     }
 
     struct SplitBetween
