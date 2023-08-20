@@ -134,13 +134,13 @@ namespace EasyString
         return Impl{ ExcludeChars };
     }
 
-    constexpr auto TrimSpace( StrView Input )
+    constexpr auto TrimSpace( StrView Input ) -> StrView
     {
-        constexpr auto SpaceChar = []( char c ) {
-            return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
+        constexpr auto SpaceChar = []( const char c ) {
+            return ! ( c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v' );
         };
         return std::all_of( Input.begin(), Input.end(), SpaceChar )
-                   ? StrView{}
+                   ? StrView{ Input.end(), 0 }
                    : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),
                               std::find_if_not( Input.rbegin(), Input.rend(), SpaceChar ).base() };
     }
@@ -161,9 +161,13 @@ namespace EasyString
         };
     }
 
-    constexpr auto Between( StrView LeftBound, StrView RightBound )
+    constexpr auto Between( StrView Left, StrView Right )
     {
-        return [=]( StrView Input ) -> StrView { return Input | After( LeftBound ) | Before( RightBound ); };
+        return [=]( StrView Input ) {
+            return Input            //
+                   | After( Left )  //
+                   | Before( Right );
+        };
     }
 
     constexpr auto Count( StrView Pattern )
@@ -172,22 +176,15 @@ namespace EasyString
         {
             constexpr auto In( StrView Input ) const
             {
-                auto Count = 0uz;
-                while( Input.contains( Text ) )
-                {
-                    ++Count;
-                    Input |= After( Text );
-                }
+                auto Count = std::size_t{ Input.ends_with( Text ) };
+                while( ! ( Input |= After( Text ) ).empty() ) ++Count;
                 return Count;
 
-                // auto SearchNext = Search( Text );
-                // auto Count = -1;
-                // for( auto NewFound = Input.begin();  //
-                //      NewFound != Input.end();        //
-                //      NewFound = SearchNext.In( Input ) )
+                // auto Count = 0uz;
+                // while( Input.contains( Text ) )
                 // {
                 //     ++Count;
-                //     Input = { NewFound + Text.length(), Input.end() };
+                //     Input |= After( Text );
                 // }
                 // return Count;
             }
