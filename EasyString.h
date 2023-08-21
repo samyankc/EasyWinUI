@@ -154,7 +154,7 @@ namespace EasyString
     {
         return [=]( StrView Input ) -> StrView {
             auto Match = Search( Pattern ).In( Input );
-            if( Match.begin() == Input.end() )
+            if( Match.empty() )
                 return { Input.end(), 0 };
             else
                 return { Input.begin(), Match.begin() };
@@ -179,14 +179,6 @@ namespace EasyString
                 auto Count = std::size_t{ Input.ends_with( Text ) };
                 while( ! ( Input |= After( Text ) ).empty() ) ++Count;
                 return Count;
-
-                // auto Count = 0uz;
-                // while( Input.contains( Text ) )
-                // {
-                //     ++Count;
-                //     Input |= After( Text );
-                // }
-                // return Count;
             }
 
             constexpr auto operator()( StrView Input ) const { return In( Input ); }
@@ -392,7 +384,7 @@ namespace EasyString
     constexpr auto Bundle = std::in_place_index<N>;
 
     template<size_t N>
-    auto operator|( const auto& Container, std::in_place_index_t<N> )
+    constexpr auto operator|( const auto& Container, std::in_place_index_t<N> )
     {
         // return [&]<size_t... Is>( std::index_sequence<Is...> ) {return std::array{ Container[Is]... };}( std::make_index_sequence<N>() );
         using ValueType = std::decay_t<decltype( *Container.begin() )>;
@@ -402,40 +394,52 @@ namespace EasyString
         return std::array<std::array<ValueType, N>, 1>{ Result };
     }
 
-    struct SplitBetween
+    constexpr auto SplitBetween( StrView LeftDelimiter, StrView RightDelimiter )
     {
-        StrView LeftDelimiter, RightDelimiter;
-
-        struct InternalItorSentinel
-        {};
-
-        struct InternalItor
+        struct Impl : StrViewPair
         {
-            StrView BaseRange, LeftDelimiter, RightDelimiter;
+            using StrViewPair::StrViewPair;
 
-            auto operator*() { return BaseRange | Between( "", RightDelimiter ); }
-            auto operator!=( InternalItorSentinel ) { return ! BaseRange.empty(); }
-            auto operator++()
+            struct InternalItorSentinel
+            {};
+
+            struct InternalItor
             {
-                BaseRange |= After( RightDelimiter );
-                BaseRange |= After( LeftDelimiter );
-                if( ! BaseRange.contains( RightDelimiter ) ) BaseRange.remove_prefix( BaseRange.length() );
-            }
+                StrView BaseRange, LeftDelimiter, RightDelimiter;
+
+                constexpr auto operator*() const { return BaseRange | Before( RightDelimiter ); }
+                constexpr auto operator!=( InternalItorSentinel ) const { return ! BaseRange.empty(); }
+                constexpr auto& operator++()
+                {
+                    BaseRange |= After( RightDelimiter );
+                    BaseRange |= After( LeftDelimiter );
+                    if( ! BaseRange.contains( RightDelimiter ) ) BaseRange.remove_prefix( BaseRange.length() );
+                    return *this;
+                }
+                constexpr auto operator++( int )
+                {
+                    auto CacheIt = *this;
+                    this->operator++();
+                    return CacheIt;
+                }
+            };
+
+            struct InternalRange
+            {
+                StrView BaseRange, LeftDelimiter, RightDelimiter;
+
+                constexpr auto begin() const
+                {
+                    return InternalItor{ BaseRange | After( LeftDelimiter ), LeftDelimiter, RightDelimiter };
+                }
+                constexpr auto end() const { return InternalItorSentinel{}; }
+            };
+
+            constexpr auto operator()( StrView Input ) const { return InternalRange{ Input, Left, Right }; }
         };
 
-        struct InternalRange
-        {
-            StrView BaseRange, LeftDelimiter, RightDelimiter;
-
-            auto begin() { return InternalItor{ BaseRange | After( LeftDelimiter ), LeftDelimiter, RightDelimiter }; }
-            auto end() { return InternalItorSentinel{}; }
-        };
-
-        friend auto operator|( StrView Source, const SplitBetween& Adaptor )
-        {
-            return InternalRange{ Source, Adaptor.LeftDelimiter, Adaptor.RightDelimiter };
-        }
-    };
+        return Impl{ LeftDelimiter, RightDelimiter };
+    }
 
     template<typename Predicate>
     struct DropIf
