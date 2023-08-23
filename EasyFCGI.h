@@ -1,12 +1,13 @@
-#ifndef H_FCGI_REQUEST_PARSER_
-#define H_FCGI_REQUEST_PARSER_
+#ifndef H_EASY_FCGI_
+#define H_EASY_FCGI_
 
-// #include "string_split.hpp"
-#include "BijectiveMap.hpp"
-#include "EasyString.h"
+#define NO_FCGI_DEFINES
 #include <fcgi_stdio.h>
 
-namespace FCGI
+#include "BijectiveMap.hpp"
+#include "EasyString.h"
+
+namespace EasyFCGI
 {
     using namespace EasyString;
 
@@ -89,5 +90,21 @@ namespace FCGI
 
         return R;
     }
-}  // namespace FCGI
+
+    struct RequestQueue
+    {
+        struct InternalItor
+        {
+            auto operator*() const { return NextRequest(); }
+            auto operator!=( InternalItor ) const { return FCGI_Accept() >= 0; }
+            constexpr auto operator++() const { return *this; }
+            constexpr auto operator++( int ) const { return *this; }
+        };
+
+        constexpr auto begin() const { return InternalItor{}; }
+        constexpr auto end() const { return InternalItor{}; }
+    };
+}  // namespace EasyFCGI
+constexpr auto FCGI_ReuqestQueue = EasyFCGI::RequestQueue{};
+
 #endif
