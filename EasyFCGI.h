@@ -6,21 +6,13 @@
 
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
+#include <ranges>
 
 namespace EasyFCGI
 {
     using namespace EasyString;
 
-    inline auto MapQueryString( std::string_view Source )
-    {
-        auto Result = BijectiveMap<std::string_view, std::string_view>{};
-
-        for( auto Segment : Source | SplitBy( '&' ) )                        //
-            for( auto [Key, Value] : Segment | SplitBy( '=' ) | Bundle<2> )  //
-                Result[Key] = Value;
-
-        return Result;
-    }
+    constexpr auto Send = FCGI_puts;
 
     namespace HTTP
     {
@@ -47,7 +39,6 @@ namespace EasyFCGI
 
             constexpr operator VerbType() const { return Verb; }
         };
-
     }  // namespace HTTP
 
     struct FCGI_Request
@@ -58,14 +49,27 @@ namespace EasyFCGI
         std::string_view ScriptName;
         std::string_view RequestURI;
         std::string QueryStringCache;
-        BijectiveMap<std::string_view, std::string_view> QueryString;
+        BijectiveMap<std::string_view, std::string_view> Query;
 
-        auto Read( std::string_view ParamName )
+        auto Read( std::string_view ParamName ) const
         {
             auto LoadParamFromEnv = getenv( std::string{ ParamName }.c_str() );
             return std::string_view{ LoadParamFromEnv ? LoadParamFromEnv : "No Content" };
         }
+
+        // auto operator[]( std::string_view Key ) const { return QueryString[Key]; }
     };
+
+    inline auto MapQueryString( std::string_view Source )
+    {
+        auto Result = BijectiveMap<std::string_view, std::string_view>{};
+
+        for( auto Segment : Source | SplitBy( '&' ) )                        //
+            for( auto [Key, Value] : Segment | SplitBy( '=' ) | Bundle<2> )  //
+                Result[Key] = Value;
+
+        return Result;
+    }
 
     inline auto NextRequest()
     {
@@ -86,7 +90,7 @@ namespace EasyFCGI
         else
             R.QueryStringCache = getenv( "QUERY_STRING" );
 
-        R.QueryString = MapQueryString( R.QueryStringCache );
+        R.Query = MapQueryString( R.QueryStringCache );
 
         return R;
     }
@@ -95,9 +99,12 @@ namespace EasyFCGI
     {
         struct InternalItor
         {
+            using difference_type = std::ptrdiff_t;
+            using value_type = decltype( NextRequest() );
+
             auto operator*() const { return NextRequest(); }
-            auto operator!=( InternalItor ) const { return FCGI_Accept() >= 0; }
-            constexpr auto operator++() const { return *this; }
+            auto operator==( InternalItor ) const { return FCGI_Accept() < 0; }
+            constexpr auto& operator++() { return *this; }
             constexpr auto operator++( int ) const { return *this; }
         };
 
@@ -105,6 +112,10 @@ namespace EasyFCGI
         constexpr auto end() const { return InternalItor{}; }
     };
 }  // namespace EasyFCGI
+
+template<>
+inline constexpr bool std::ranges::enable_borrowed_range<EasyFCGI::RequestQueue> = true;
+
 constexpr auto FCGI_ReuqestQueue = EasyFCGI::RequestQueue{};
 
 #endif
