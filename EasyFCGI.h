@@ -12,7 +12,9 @@ namespace EasyFCGI
 {
     using namespace EasyString;
 
-    constexpr auto Send = FCGI_puts;
+    inline auto Send( const char* Content ) { return FCGI_puts( Content ); }
+    inline auto Send( const std::string& Content ) { return Send( Content.c_str() ); }
+    inline auto Send( std::string_view Content ) { return Send( std::string{ Content } ); }
 
     namespace HTTP
     {
@@ -30,10 +32,12 @@ namespace EasyFCGI
 
             inline const static auto VerbToStrView = StrViewToVerb.Inverse();
 
-            ReuqestMethod() = default;
-            ReuqestMethod( const ReuqestMethod& ) = default;
-            ReuqestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
-            ReuqestMethod( std::convertible_to<std::string_view> auto VerbName ) : Verb{ StrViewToVerb[VerbName] } {}
+            constexpr ReuqestMethod() = default;
+            constexpr ReuqestMethod( const ReuqestMethod& ) = default;
+            constexpr ReuqestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
+            constexpr ReuqestMethod( std::convertible_to<std::string_view> auto VerbName )
+                : Verb{ StrViewToVerb[VerbName] }
+            {}
 
             constexpr operator std::string_view() const { return VerbToStrView[Verb]; }
 
@@ -113,8 +117,7 @@ namespace EasyFCGI
     };
 }  // namespace EasyFCGI
 
-template<>
-inline constexpr bool std::ranges::enable_borrowed_range<EasyFCGI::RequestQueue> = true;
+// template<> inline constexpr bool std::ranges::enable_borrowed_range<EasyFCGI::RequestQueue> = true;
 
 constexpr auto FCGI_ReuqestQueue = EasyFCGI::RequestQueue{};
 
