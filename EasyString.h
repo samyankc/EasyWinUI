@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 #include <functional>
+#include <format>
 
 namespace EasyString
 {
@@ -525,6 +526,37 @@ namespace EasyString
         return std::string{ LHS } + RHS;
     }
 
+    template<std::size_t N, typename CharT>
+    struct FixedString
+    {
+        using string_view = std::basic_string_view<CharT>;
+        CharT Data[N];
+        constexpr FixedString( const CharT ( &Src )[N] ) noexcept { std::copy_n( Src, N, Data ); }
+        constexpr operator string_view() const noexcept { return { Data }; }
+        constexpr auto operator[]( std::size_t i ) const noexcept { return Data[i]; }
+        constexpr auto BufferSize() const noexcept { return N; }
+        constexpr auto Length() const noexcept { return N - 1; }
+        // friend constexpr auto operator==( string_view Other, const FixedString& Self ) noexcept
+        // { return Other == Self.Data; }
+        // friend constexpr auto operator==( const FixedString& Self, string_view Other ) noexcept
+        // { return Other == Self.Data; }
+    };
+
+    template<FixedString FSTR>
+    struct PreFMT
+    {
+        template<typename... Args>
+        constexpr static auto operator[]( Args&&... args )
+        {
+            return std::format( static_cast<std::string_view>( FSTR ), std::forward<Args>( args )... );
+        }
+    };
+
+    template<FixedString FSTR>
+    inline constexpr auto operator""_FMT() noexcept
+    {
+        return PreFMT<FSTR>{};
+    }
 }  // namespace EasyString
 
 using EasyString::operator+;  // NOLINT

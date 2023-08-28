@@ -6,15 +6,19 @@
 
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
-#include <ranges>
+#include <format>
 
-namespace EasyFCGI
+inline namespace EasyFCGI
 {
     using namespace EasyString;
 
-    inline auto Send( const char* Content ) { return FCGI_puts( Content ); }
-    inline auto Send( const std::string& Content ) { return Send( Content.c_str() ); }
-    inline auto Send( std::string_view Content ) { return Send( std::string{ Content } ); }
+    template<typename... Args>
+    inline auto Send( std::format_string<Args...> fmt, Args&&... args )
+    {
+        return FCGI_puts( std::format( fmt, args... ).c_str() );
+    }
+
+    inline auto Send( std::string_view Content ) { return FCGI_puts( std::string{ Content }.c_str() ); }
 
     namespace HTTP
     {
@@ -87,8 +91,8 @@ namespace EasyFCGI
         if( R.RequestMethod == HTTP::ReuqestMethod::POST )
             R.QueryStringCache.resize_and_overwrite(  //
                 R.ContentLength,
-                []( char* B, size_t S ) {  //
-                    return FCGI_fread( B, 1, S, FCGI_stdin );
+                []( char* Buffer, size_t BufferSize ) {  //
+                    return FCGI_fread( Buffer, sizeof( 1 [Buffer] ), BufferSize, FCGI_stdin );
                 }  //
             );
         else
