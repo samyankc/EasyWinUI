@@ -6,7 +6,6 @@
 
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
-#include <format>
 
 inline namespace EasyFCGI
 {
@@ -15,7 +14,7 @@ inline namespace EasyFCGI
     template<typename... Args>
     inline auto Send( std::format_string<Args...> fmt, Args&&... args )
     {
-        return FCGI_puts( std::format( fmt, args... ).c_str() );
+        return FCGI_puts( std::format( fmt, std::forward<Args>( args )... ).c_str() );
     }
 
     inline auto Send( std::string_view Content ) { return FCGI_puts( std::string{ Content }.c_str() ); }

@@ -546,6 +546,12 @@ namespace EasyString
     struct PreFMT
     {
         template<typename... Args>
+        constexpr static auto operator()( Args&&... args )
+        {
+            return std::format( static_cast<std::string_view>( FSTR ), std::forward<Args>( args )... );
+        }
+
+        template<typename... Args>
         constexpr static auto operator[]( Args&&... args )
         {
             return std::format( static_cast<std::string_view>( FSTR ), std::forward<Args>( args )... );
@@ -557,6 +563,10 @@ namespace EasyString
     {
         return PreFMT<FSTR>{};
     }
+
+    template<FixedString FSTR>
+    constexpr auto $ = PreFMT<FSTR>{};
+
 }  // namespace EasyString
 
 using EasyString::operator+;  // NOLINT
