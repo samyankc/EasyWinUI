@@ -526,20 +526,12 @@ namespace EasyString
         return std::string{ LHS } + RHS;
     }
 
-    template<std::size_t N, typename CharT>
+    template<std::size_t N, typename CharT = char>
     struct FixedString
     {
-        using string_view = std::basic_string_view<CharT>;
         CharT Data[N];
         constexpr FixedString( const CharT ( &Src )[N] ) noexcept { std::copy_n( Src, N, Data ); }
-        constexpr operator string_view() const noexcept { return { Data }; }
-        // constexpr auto operator[]( std::size_t i ) const noexcept { return Data[i]; }
-        // constexpr auto BufferSize() const noexcept { return N; }
-        // constexpr auto Length() const noexcept { return N - 1; }
-        // friend constexpr auto operator==( string_view Other, const FixedString& Self ) noexcept
-        // { return Other == Self.Data; }
-        // friend constexpr auto operator==( const FixedString& Self, string_view Other ) noexcept
-        // { return Other == Self.Data; }
+        constexpr operator std::basic_string_view<CharT>() const noexcept { return { Data }; }
     };
 
     template<FixedString FSTR>
