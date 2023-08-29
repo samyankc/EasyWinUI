@@ -30,6 +30,13 @@ struct BijectiveMap : std::vector<std::pair<KeyType, ValueType>>
         return this->emplace_back( TargetKey, ValueType{} ).second;
     }
 
+    template<std::convertible_to<KeyType>... KeyTypes>
+    requires( sizeof...( KeyTypes ) > 1 )
+    constexpr auto operator[]( const KeyTypes&... TargetKeys ) const
+    {
+        return std::array{ ( *this )[TargetKeys]... };
+    }
+
     constexpr auto Inverse() const
     {
         auto InverseMap = BijectiveMap<ValueType, KeyType>{};

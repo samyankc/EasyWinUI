@@ -3,6 +3,7 @@
 
 #define NO_FCGI_DEFINES
 #include <fcgi_stdio.h>
+#include <memory>
 
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
@@ -117,11 +118,20 @@ inline namespace EasyFCGI
 
         constexpr auto begin() const { return InternalItor{}; }
         constexpr auto end() const { return InternalItor{}; }
+        constexpr auto empty() const { return false; }
+        auto front() const { return NextRequest(); }
     };
 }  // namespace EasyFCGI
 
 // template<> inline constexpr bool std::ranges::enable_borrowed_range<EasyFCGI::RequestQueue> = true;
 
-constexpr auto FCGI_ReuqestQueue = EasyFCGI::RequestQueue{};
+constexpr auto FCGI_RequestQueue = EasyFCGI::RequestQueue{};
+
+template<auto Deleter, typename T>
+constexpr auto ResourceGuard( T* Resource )
+{
+    using DeleterType = decltype( []( T* p ) { Deleter( p ); } );
+    return std::unique_ptr<T, DeleterType>( Resource );
+}
 
 #endif
