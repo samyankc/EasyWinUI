@@ -533,9 +533,9 @@ namespace EasyString
         CharT Data[N];
         constexpr FixedString( const CharT ( &Src )[N] ) noexcept { std::copy_n( Src, N, Data ); }
         constexpr operator string_view() const noexcept { return { Data }; }
-        constexpr auto operator[]( std::size_t i ) const noexcept { return Data[i]; }
-        constexpr auto BufferSize() const noexcept { return N; }
-        constexpr auto Length() const noexcept { return N - 1; }
+        // constexpr auto operator[]( std::size_t i ) const noexcept { return Data[i]; }
+        // constexpr auto BufferSize() const noexcept { return N; }
+        // constexpr auto Length() const noexcept { return N - 1; }
         // friend constexpr auto operator==( string_view Other, const FixedString& Self ) noexcept
         // { return Other == Self.Data; }
         // friend constexpr auto operator==( const FixedString& Self, string_view Other ) noexcept
@@ -543,29 +543,19 @@ namespace EasyString
     };
 
     template<FixedString FSTR>
-    struct PreFMT
+    struct FMT
     {
-        template<typename... Args>
-        constexpr static auto operator()( Args&&... args )
+        constexpr static auto operator()( auto&&... args )
         {
-            return std::format( static_cast<std::string_view>( FSTR ), std::forward<Args>( args )... );
-        }
-
-        template<typename... Args>
-        constexpr static auto operator[]( Args&&... args )
-        {
-            return std::format( static_cast<std::string_view>( FSTR ), std::forward<Args>( args )... );
+            return std::format( FSTR, std::forward<decltype( args )>( args )... );
         }
     };
 
     template<FixedString FSTR>
     inline constexpr auto operator""_FMT() noexcept
     {
-        return PreFMT<FSTR>{};
+        return FMT<FSTR>{};
     }
-
-    template<FixedString FSTR>
-    constexpr auto $ = PreFMT<FSTR>{};
 
 }  // namespace EasyString
 
