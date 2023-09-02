@@ -20,6 +20,13 @@ inline namespace EasyFCGI
 
     inline auto Send( std::string_view Content ) { return FCGI_puts( std::string{ Content }.c_str() ); }
 
+    template<typename HasDump>
+    requires requires { std::declval<HasDump>().dump(); }
+    inline auto Send( const HasDump& Content )
+    {
+        return Send( Content.dump() );
+    }
+
     namespace HTTP
     {
         struct ReuqestMethod
