@@ -139,7 +139,7 @@ namespace EasyString
     constexpr auto TrimSpace( StrView Input ) -> StrView
     {
         constexpr auto SpaceChar = []( const char c ) {
-            return ! ( c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v' );
+            return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
         };
         return std::all_of( Input.begin(), Input.end(), SpaceChar )
                    ? StrView{ Input.end(), 0 }
