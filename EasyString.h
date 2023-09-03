@@ -9,6 +9,7 @@
 #include <vector>
 #include <functional>
 #include <format>
+#include <charconv>
 
 namespace EasyString
 {
@@ -244,6 +245,16 @@ namespace EasyString
     constexpr auto SplitBy( char Delimiter )
     {
         return [=]( StrView Pattern ) { return Split( Pattern ).By( Delimiter ); };
+    }
+
+    template<std::integral INT>
+    constexpr auto StrViewTo( StrView Source )
+    {
+        Source |= TrimSpace;
+        auto ConversionResult = INT{};
+        auto [ptr, err] = std::from_chars( Source.data(), Source.data() + Source.size(), ConversionResult );
+        if( err == std::errc{} ) return std::nullopt;
+        return std::optional<INT>{ ConversionResult };
     }
 
     namespace Lagacy
