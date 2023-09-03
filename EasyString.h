@@ -248,13 +248,13 @@ namespace EasyString
     }
 
     template<std::integral INT>
-    constexpr auto StrViewTo( StrView Source )
+    constexpr auto StrViewTo( StrView Source ) -> std::optional<INT>
     {
         Source |= TrimSpace;
         auto ConversionResult = INT{};
         auto [ptr, err] = std::from_chars( Source.data(), Source.data() + Source.size(), ConversionResult );
         if( err == std::errc{} ) return std::nullopt;
-        return std::optional<INT>{ ConversionResult };
+        return ConversionResult;
     }
 
     namespace Lagacy
