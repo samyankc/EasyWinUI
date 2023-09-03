@@ -253,8 +253,8 @@ namespace EasyString
         Source |= TrimSpace;
         auto ConversionResult = INT{};
         auto [ptr, err] = std::from_chars( Source.data(), Source.data() + Source.size(), ConversionResult );
-        if( err == std::errc{} ) return std::nullopt;
-        return ConversionResult;
+        if( err == std::errc{} ) return ConversionResult;
+        return std::nullopt;
     }
 
     namespace Lagacy
