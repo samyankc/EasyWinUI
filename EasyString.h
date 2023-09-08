@@ -562,6 +562,7 @@ namespace EasyString
 
 }  // namespace EasyString
 
+using EasyString::operator""_FMT;
 using EasyString::operator+;  // NOLINT
 
 #endif
