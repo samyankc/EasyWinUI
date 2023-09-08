@@ -1,8 +1,8 @@
 #ifndef _EASYLOG_H
 #define _EASYLOG_H
 
+#include <format>
 #include <pqxx/pqxx>
-#include "EasyString.h"
 
 inline namespace EasyLog
 {
@@ -16,8 +16,9 @@ inline namespace EasyLog
         auto operator<<( std::string_view Message )
         {
             auto Tx = pqxx::work{ Connection };
-            Tx.exec( "INSERT INTO cgi_execution_log(app_name,message) VALUES('{}','{}')"_FMT  //
-                     ( ApplicationName, Message ) );
+            Tx.exec( std::format(                                                     //
+                "INSERT INTO cgi_execution_log(app_name,message) VALUES('{}','{}')",  //
+                ApplicationName, Message ) );
             Tx.commit();
         }
     };

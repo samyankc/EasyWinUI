@@ -125,7 +125,7 @@ inline namespace EasyFCGI
 
         constexpr auto begin() const { return InternalItor{}; }
         constexpr auto end() const { return InternalItor{}; }
-        constexpr auto empty() const { return false; }
+        constexpr auto empty() const { return begin() == end(); }
         auto front() const { return NextRequest(); }
     };
 }  // namespace EasyFCGI
