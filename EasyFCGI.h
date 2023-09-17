@@ -66,11 +66,16 @@ inline namespace EasyFCGI
         std::string QueryStringCache;
         BijectiveMap<std::string_view, std::string_view> Query;
 
-        auto Read( std::convertible_to<std::string_view> auto&& ParamName ) const
+        auto ReadParam( const char* BuffPtr ) const
         {
-            // auto LoadParamFromEnv = getenv( std::string{ ParamName }.c_str() );
-            auto LoadParamFromEnv = getenv( std::data( ParamName ) );
+            auto LoadParamFromEnv = getenv( BuffPtr );
             return std::string_view{ LoadParamFromEnv ? LoadParamFromEnv : "No Content" };
+        }
+
+        auto ReadParam( std::string_view ParamName ) const
+        {
+            return ReadParam( *ParamName.cend() == '\0' ? std::data( ParamName )
+                                                        : std::data( std::string( ParamName ) ) );
         }
 
         // auto operator[]( std::string_view Key ) const { return QueryString[Key]; }
