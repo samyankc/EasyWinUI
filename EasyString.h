@@ -253,11 +253,11 @@ namespace EasyString
         return [=]( StrView Pattern ) { return Split( Pattern ).By( Delimiter ); };
     }
 
-    template<std::integral INT>
-    constexpr auto StrViewTo( StrView Source ) -> std::optional<INT>
+    template<std::integral INT_TYPE>
+    constexpr auto StrViewTo( StrView Source ) -> std::optional<INT_TYPE>
     {
         Source |= TrimSpace;
-        auto ConversionResult = INT{};
+        auto ConversionResult = INT_TYPE{};
         auto [ptr, err] = std::from_chars( Source.data(), Source.data() + Source.size(), ConversionResult );
         if( err == std::errc{} ) return ConversionResult;
         return std::nullopt;
