@@ -91,14 +91,25 @@ namespace Debug
     {
         constexpr auto PrintMessage( std::string_view msg ) const
         {
-            std::cout << std::format( "[ {} @ {} ] | {}\n", TypeName<T>, static_cast<const void*>( this ), msg );
+            std::cout << std::format( "[ {} @ {} ] | {}", TypeName<T>, static_cast<const void*>( this ), msg )
+                      << std::endl;
         }
 
-        constexpr Noisy() { PrintMessage( "Default Ctor" ); }
-        constexpr Noisy( const Noisy& ) { PrintMessage( "Copy Ctor" ); }
-        constexpr Noisy( Noisy&& ) { PrintMessage( "Move Ctor" ); }
-        constexpr ~Noisy() requires( ( SilentFlag & Silent::Dtor ) ) { PrintMessage( "Dtor" ); }
-        constexpr ~Noisy() requires( ! ( SilentFlag & Silent::Dtor ) )
+        constexpr auto Ctor_PrintMessage( std::string_view msg ) const
+        {
+            if constexpr( ! ( SilentFlag & Silent::Ctor ) ) PrintMessage( msg );
+        }
+
+        constexpr Noisy() { Ctor_PrintMessage( "Default Ctor" ); }
+        constexpr Noisy( const Noisy& ) { Ctor_PrintMessage( "Copy Ctor" ); }
+        constexpr Noisy( Noisy&& ) { Ctor_PrintMessage( "Move Ctor" ); }
+
+        constexpr Noisy( const T& ) { Ctor_PrintMessage( "Copy T Ctor" ); }
+        constexpr Noisy( T&& ) { Ctor_PrintMessage( "Move T Ctor" ); }
+
+        constexpr ~Noisy() requires( ! ( SilentFlag & Silent::Dtor ) ) { PrintMessage( "Dtor" ); }
+        constexpr ~Noisy()
+        requires( ( SilentFlag & Silent::Dtor ) )
         = default;
     };
 }  // namespace Debug
