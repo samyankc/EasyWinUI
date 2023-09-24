@@ -17,6 +17,12 @@ namespace EasyString
     using namespace std::string_view_literals;
     using StrView = std::string_view;
 
+    // auto TransientNullTerminate( std::string_view Input )
+    // {
+    //     return *Input.cend() == '\0' ? std::data( Input )  //
+    //                                  : std::data( std::string( Input ) );
+    // }
+
     inline namespace Concepts
     {
         template<typename AdaptorType>
@@ -545,19 +551,20 @@ namespace EasyString
         constexpr operator std::basic_string_view<CharT>() const noexcept { return { Data }; }
     };
 
-    template<FixedString FSTR>
-    struct FMT
-    {
-        constexpr static auto operator()( auto&&... args )
-        {
-            return std::format( FSTR, std::forward<decltype( args )>( args )... );
-        }
-    };
+    // template<FixedString FSTR>
+    // struct FMT
+    // {
+    //     constexpr static auto operator()( auto&&... args )
+    //     {
+    //         return std::format( FSTR, std::forward<decltype( args )>( args )... );
+    //     }
+    // };
 
     template<FixedString FSTR>
-    inline constexpr auto operator""_FMT() noexcept
+    constexpr auto operator""_FMT() noexcept
     {
-        return FMT<FSTR>{};
+        // return FMT<FSTR>{};
+        return []( auto&&... args ) { return std::format( FSTR, std::forward<decltype( args )>( args )... ); };
     }
 
 }  // namespace EasyString

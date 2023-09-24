@@ -18,14 +18,16 @@ inline namespace EasyFCGI
         return FCGI_puts( std::format( fmt, std::forward<Args>( args )... ).c_str() );
     }
 
-    inline auto Send( std::string_view Content ) { return FCGI_puts( std::string{ Content }.c_str() ); }
-
-    template<typename HasDump>
-    requires requires { std::declval<HasDump>().dump(); }
-    inline auto Send( const HasDump& Content )
+    inline auto Send( std::string_view Content )
     {
-        return Send( Content.dump() );
+        return FCGI_puts( *Content.cend() == '\0' ? std::data( Content )  //
+                                                  : std::data( std::string( Content ) ) );
     }
+
+    template<typename T>
+    concept HasSendableDump = requires( T t ) { Send( t.dump() ); };
+
+    inline auto Send( HasSendableDump auto&& Content ) { return Send( Content.dump() ); }
 
     namespace HTTP
     {
