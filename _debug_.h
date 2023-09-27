@@ -86,31 +86,42 @@ namespace Debug
         return static_cast<unsigned>( LHS ) & static_cast<unsigned>( RHS );
     }
 
-    template<typename T, Silent SilentFlag = Silent::None>
-    struct [[maybe_unused]] Noisy
+    struct NoisyIndentation
     {
-        constexpr auto PrintMessage( std::string_view msg ) const
+        inline static std::atomic<std::size_t> CurrentIndentationLayer = 0;
+
+        static auto Width() { return 4 * CurrentIndentationLayer.load(); }
+
+        NoisyIndentation() { ++CurrentIndentationLayer; }
+        ~NoisyIndentation() { --CurrentIndentationLayer; }
+    };
+
+    template<typename T, Silent SilentFlag = Silent::None>
+    struct [[maybe_unused]] NoisyMember
+    {
+        constexpr auto PrintMessage( std::string_view Message ) const
         {
-            std::cout << std::format( "[ {} @ {} ] | {}", TypeName<T>, static_cast<const void*>( this ), msg )
+            std::cout << std::format( "{:{}}[ {} @ {} ] | {}", "", NoisyIndentation::Width(),  //
+                                      TypeName<T>, static_cast<const void*>( this ), Message )
                       << std::endl;
         }
 
-        constexpr auto Ctor_PrintMessage( std::string_view msg ) const
+        constexpr auto Ctor_PrintMessage( std::string_view Message ) const
         {
-            if constexpr( ! ( SilentFlag & Silent::Ctor ) ) PrintMessage( msg );
+            if constexpr( ! ( SilentFlag & Silent::Ctor ) ) PrintMessage( Message );
         }
 
-        constexpr Noisy() { Ctor_PrintMessage( "Default Ctor" ); }
-        constexpr Noisy( const Noisy& ) { Ctor_PrintMessage( "Copy Ctor" ); }
-        constexpr Noisy( Noisy&& ) { Ctor_PrintMessage( "Move Ctor" ); }
+        constexpr auto Dtor_PrintMessage() const
+        {
+            if constexpr( ! ( SilentFlag & Silent::Dtor ) ) PrintMessage( "Dtor" );
+        }
 
-        constexpr Noisy( const T& ) { Ctor_PrintMessage( "Copy T Ctor" ); }
-        constexpr Noisy( T&& ) { Ctor_PrintMessage( "Move T Ctor" ); }
+        constexpr NoisyMember() { Ctor_PrintMessage( "Default Ctor" ); }
 
-        constexpr ~Noisy() requires( ! ( SilentFlag & Silent::Dtor ) ) { PrintMessage( "Dtor" ); }
-        constexpr ~Noisy()
-        requires( ( SilentFlag & Silent::Dtor ) )
-        = default;
+        constexpr NoisyMember( const NoisyMember& ) { Ctor_PrintMessage( "Copy Ctor" ); }
+        constexpr NoisyMember( NoisyMember&& ) { Ctor_PrintMessage( "Move Ctor" ); }
+
+        constexpr ~NoisyMember() { Dtor_PrintMessage(); }
     };
 }  // namespace Debug
 #endif
