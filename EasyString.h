@@ -11,6 +11,9 @@
 #include <format>
 #include <charconv>
 
+// #include "EasyStringView.h"
+// using StrView = EasyStringView;
+
 namespace EasyString
 {
     using namespace std::string_literals;
@@ -161,11 +164,9 @@ namespace EasyString
     constexpr auto Before( StrView Pattern )
     {
         return [=]( StrView Input ) -> StrView {
-            auto Match = Search( Pattern ).In( Input );
-            if( Match.empty() )
-                return { Input.end(), 0 };
-            else
-                return { Input.begin(), Match.begin() };
+            auto RightBound = Search( Pattern ).In( Input ).begin();
+            auto LeftBound = RightBound == Input.end() ? Input.end() : Input.begin();
+            return { LeftBound, RightBound };
         };
     }
 
@@ -184,7 +185,7 @@ namespace EasyString
         {
             constexpr auto In( StrView Input ) const
             {
-                auto Count = std::size_t{ Input.ends_with( Text ) };
+                auto Count = static_cast<std::size_t>( Input.ends_with( Text ) );
                 while( ! ( Input |= After( Text ) ).empty() ) ++Count;
                 return Count;
             }
