@@ -14,17 +14,41 @@
 // #include "EasyStringView.h"
 // using StrView = EasyStringView;
 
+namespace
+{
+    template<typename T>
+    concept Provide_c_str = requires( T t ) { t.c_str(); };
+
+    template<typename T>
+    concept NotProvide_c_str = ! Provide_c_str<T>;
+}  // namespace
+
+namespace std
+{
+    constexpr auto c_str( const char* Source ) noexcept { return Source; }
+
+    template<Provide_c_str T>
+    constexpr auto c_str( T&& Source ) noexcept
+    {
+        return std::forward<T>( Source ).c_str();
+    }
+
+    template<NotProvide_c_str T>
+    constexpr auto c_str( T&& Source ) noexcept -> std::optional<const char*>
+    {
+        auto Begin = std::data( std::forward<T>( Source ) );
+        auto Size = std::size( std::forward<T>( Source ) );
+        if( Begin[Size] == '\0' ) return Begin;
+        return std::nullopt;
+    }
+
+}  // namespace std
+
 namespace EasyString
 {
     using namespace std::string_literals;
     using namespace std::string_view_literals;
     using StrView = std::string_view;
-
-    // auto TransientNullTerminate( std::string_view Input )
-    // {
-    //     return *Input.cend() == '\0' ? std::data( Input )  //
-    //                                  : std::data( std::string( Input ) );
-    // }
 
     inline namespace Concepts
     {
