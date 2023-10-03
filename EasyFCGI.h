@@ -18,14 +18,7 @@ inline namespace EasyFCGI
         return FCGI_puts( std::format( fmt, std::forward<Args>( args )... ).c_str() );
     }
 
-    inline auto Send( std::string_view Content )
-    {
-        // rejected, string construction will be called regardless
-        // return FCGI_puts( std::c_str( Content ).value_or( std::c_str( std::string( Content ) ) ) );
-        auto opt_c_str = std::c_str( Content );
-        return FCGI_puts( opt_c_str ? opt_c_str.value()  //
-                                    : std::string( Content ).c_str() );
-    }
+    inline auto Send( std::string_view Content ) { return FCGI_puts( std::c_str( Content ) ); }
 
     template<typename T>
     concept HasSendableDump = requires( T t ) { Send( t.dump() ); };
@@ -77,14 +70,7 @@ inline namespace EasyFCGI
             return std::string_view{ LoadParamFromEnv ? LoadParamFromEnv : "No Content" };
         }
 
-        auto ReadParam( std::string_view ParamName ) const
-        {
-            auto opt_c_str = std::c_str( ParamName );
-            return ReadParam( opt_c_str ? opt_c_str.value()  //
-                                        : std::string( ParamName ).c_str() );
-            // return ReadParam( *ParamName.cend() == '\0' ? std::data( ParamName )
-            //                                             : std::data( std::string( ParamName ) ) );
-        }
+        auto ReadParam( std::string_view ParamName ) const { return ReadParam( std::c_str( ParamName ) ); }
 
         // auto operator[]( std::string_view Key ) const { return QueryString[Key]; }
     };
