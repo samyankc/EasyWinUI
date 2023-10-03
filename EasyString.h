@@ -21,7 +21,7 @@ namespace
     template<typename T>
     concept NotProvide_c_str = ! Provide_c_str<T>;
 
-    using SafeCharPtrBase = std::variant<const char*, std::unique_ptr<std::string>>;
+    using SafeCharPtrBase = std::variant<const char*, std::unique_ptr<const char[]>>;
     struct SafeCharPtr : SafeCharPtrBase
     {
         using SafeCharPtrBase::SafeCharPtrBase;
@@ -34,7 +34,7 @@ namespace
         constexpr operator const char*() const
         {
             return std::visit( Visitor{ []( const char* Ptr ) { return Ptr; },
-                                        []( const std::unique_ptr<std::string>& Rest ) { return Rest->c_str(); },
+                                        []( const std::unique_ptr<const char[]>& Rest ) { return Rest.get(); },
                                         []( auto&& ) { return ""; } },
                                *this );
         }
@@ -54,10 +54,18 @@ namespace std
     template<NotProvide_c_str T>
     constexpr auto c_str( T&& Source ) noexcept -> SafeCharPtr
     {
-        auto Begin = std::data( std::forward<T>( Source ) );
+        auto Buffer = std::data( std::forward<T>( Source ) );
         auto Size = std::size( std::forward<T>( Source ) );
-        if( Begin[Size] == '\0' ) return Begin;
-        return std::make_unique<std::string>( Source );
+
+        if( Buffer[Size] == '\0' )
+            return Buffer;
+        else
+        {
+            auto NewBuffer = new char[Size + 1];
+            std::copy_n( Buffer, Size, NewBuffer );
+            NewBuffer[Size] = '\0';
+            return std::unique_ptr<const char[]>{ NewBuffer };
+        }
     }
 
 }  // namespace std
