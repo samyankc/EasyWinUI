@@ -10,6 +10,8 @@
 #include <functional>
 #include <format>
 #include <charconv>
+#include <variant>
+#include <memory>
 
 namespace
 {
@@ -18,6 +20,25 @@ namespace
 
     template<typename T>
     concept NotProvide_c_str = ! Provide_c_str<T>;
+
+    using SafeCharPtrBase = std::variant<const char*, std::unique_ptr<std::string>>;
+    struct SafeCharPtr : SafeCharPtrBase
+    {
+        using SafeCharPtrBase::SafeCharPtrBase;
+        template<typename... Ts>
+        struct Visitor : Ts...
+        {
+            using Ts::operator()...;
+        };
+
+        constexpr operator const char*() const
+        {
+            return std::visit( Visitor{ []( const char* Ptr ) { return Ptr; },
+                                        []( const std::unique_ptr<std::string>& Rest ) { return Rest->c_str(); },
+                                        []( auto&& ) { return ""; } },
+                               *this );
+        }
+    };
 }  // namespace
 
 namespace std
@@ -31,12 +52,12 @@ namespace std
     }
 
     template<NotProvide_c_str T>
-    constexpr auto c_str( T&& Source ) noexcept -> std::optional<const char*>
+    constexpr auto c_str( T&& Source ) noexcept -> SafeCharPtr
     {
         auto Begin = std::data( std::forward<T>( Source ) );
         auto Size = std::size( std::forward<T>( Source ) );
         if( Begin[Size] == '\0' ) return Begin;
-        return std::nullopt;
+        return std::make_unique<std::string>( Source );
     }
 
 }  // namespace std

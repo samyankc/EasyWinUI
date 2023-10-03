@@ -101,20 +101,26 @@ auto TestBefore()
     };
 }
 
+auto AcceptConstCharPtr( const char* Ptr ) { return Ptr; }
+
 auto TestStrView_c_str()
 {
-    "TestStrView_c_str"_test = [] {
-    };
-    auto abc = std::string_view("abc");
-    auto kkk = std::array{'a','b','c','d'};
-    std::c_str(abc);
+    "TestStrView_c_str"_test = [] {};
+    auto abc = std::string_view( "abc" );
+    auto kkk = std::array{ 'a', 'b', 'c', 'd' };
+
+    std::cout << std::format( "{} is {}\n", "std::c_str( abc )", AcceptConstCharPtr( std::c_str( abc ) ) );
+
+    auto ab = std::string_view{ abc.begin(), abc.begin() + 2 };
+    std::cout << std::format( "{} is {}\n", "std::c_str( ab )", AcceptConstCharPtr( std::c_str( ab ) ) );
+    std::cout << std::format( "{} is {}\n", "std::data( ab )", AcceptConstCharPtr( std::data( ab ) ) );
 
 }
 
-
 int main()
 {
-    TestSearch();
-    TestBefore();
+    // TestSearch();
+    // TestBefore();
+    TestStrView_c_str();
     return 0;
 }
