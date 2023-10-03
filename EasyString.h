@@ -11,9 +11,6 @@
 #include <format>
 #include <charconv>
 
-// #include "EasyStringView.h"
-// using StrView = EasyStringView;
-
 namespace
 {
     template<typename T>
@@ -133,11 +130,7 @@ namespace EasyString
             constexpr auto In( StrView Input ) const -> StrView
             {
                 auto MatchBegin = Search_impl( Input );
-                // if( MatchBegin == Input.end() )
-                //     return { Input.end(), 0 };
-                // else
-                //     return { MatchBegin, Text.length() };
-                return { MatchBegin, ( MatchBegin != Input.end() ) * Text.length() };
+                return { MatchBegin, MatchBegin == Input.end() ? 0 : Text.length() };
             }
 
             constexpr auto operator()( StrView Source ) const { return In( Source ); }
