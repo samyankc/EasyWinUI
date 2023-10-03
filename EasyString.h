@@ -11,17 +11,41 @@
 #include <format>
 #include <charconv>
 
+namespace
+{
+    template<typename T>
+    concept Provide_c_str = requires( T t ) { t.c_str(); };
+
+    template<typename T>
+    concept NotProvide_c_str = ! Provide_c_str<T>;
+}  // namespace
+
+namespace std
+{
+    constexpr auto c_str( const char* Source ) noexcept { return Source; }
+
+    template<Provide_c_str T>
+    constexpr auto c_str( T&& Source ) noexcept
+    {
+        return std::forward<T>( Source ).c_str();
+    }
+
+    template<NotProvide_c_str T>
+    constexpr auto c_str( T&& Source ) noexcept -> std::optional<const char*>
+    {
+        auto Begin = std::data( std::forward<T>( Source ) );
+        auto Size = std::size( std::forward<T>( Source ) );
+        if( Begin[Size] == '\0' ) return Begin;
+        return std::nullopt;
+    }
+
+}  // namespace std
+
 namespace EasyString
 {
     using namespace std::string_literals;
     using namespace std::string_view_literals;
     using StrView = std::string_view;
-
-    // auto TransientNullTerminate( std::string_view Input )
-    // {
-    //     return *Input.cend() == '\0' ? std::data( Input )  //
-    //                                  : std::data( std::string( Input ) );
-    // }
 
     inline namespace Concepts
     {
@@ -106,11 +130,7 @@ namespace EasyString
             constexpr auto In( StrView Input ) const -> StrView
             {
                 auto MatchBegin = Search_impl( Input );
-                // if( MatchBegin == Input.end() )
-                //     return { Input.end(), 0 };
-                // else
-                //     return { MatchBegin, Text.length() };
-                return { MatchBegin, ( MatchBegin != Input.end() ) * Text.length() };
+                return { MatchBegin, MatchBegin == Input.end() ? 0 : Text.length() };
             }
 
             constexpr auto operator()( StrView Source ) const { return In( Source ); }
@@ -161,11 +181,9 @@ namespace EasyString
     constexpr auto Before( StrView Pattern )
     {
         return [=]( StrView Input ) -> StrView {
-            auto Match = Search( Pattern ).In( Input );
-            if( Match.empty() )
-                return { Input.end(), 0 };
-            else
-                return { Input.begin(), Match.begin() };
+            auto RightBound = Search( Pattern ).In( Input ).begin();
+            auto LeftBound = RightBound == Input.end() ? Input.end() : Input.begin();
+            return { LeftBound, RightBound };
         };
     }
 
@@ -184,7 +202,7 @@ namespace EasyString
         {
             constexpr auto In( StrView Input ) const
             {
-                auto Count = std::size_t{ Input.ends_with( Text ) };
+                auto Count = static_cast<std::size_t>( Input.ends_with( Text ) );
                 while( ! ( Input |= After( Text ) ).empty() ) ++Count;
                 return Count;
             }

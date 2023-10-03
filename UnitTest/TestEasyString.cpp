@@ -1,5 +1,5 @@
-#include <EasyTest.h>
-#include <EasyString.h>
+#include "../EasyTest.h"
+#include "../EasyString.h"
 #include <format>
 
 using namespace boost::ut;
@@ -7,14 +7,13 @@ using namespace boost::ut::literals;
 
 using namespace EasyString;
 
-constexpr auto StrViewStrongEquality = []( ExStrView LHS, ExStrView RHS ) {
+constexpr auto StrViewStrongEquality = []( StrView LHS, StrView RHS ) {
     return LHS == RHS && LHS.begin() == RHS.begin() && LHS.end() == RHS.end();
 };
 
-constexpr auto PrepareSearchData = []( ExStrView Text, ExStrView Input ) {
+constexpr auto PrepareSearchData = []( StrView Text, StrView Input ) {
     return std::tuple( Text, Input, Search( Text ).In( Input ), Input | Search( Text ) );
 };
-
 auto TestSearch()
 {
     "Search bcd In abcde [common case]"_test = [] {
@@ -59,7 +58,7 @@ auto TestSearch()
     };
 }
 
-constexpr auto PrepareBeforeData = []( ExStrView Text, ExStrView Input ) {
+constexpr auto PrepareBeforeData = []( StrView Text, StrView Input ) {
     return std::tuple( Text, Input, Before( Text )( Input ), Input | Before( Text ) );
 };
 auto TestBefore()
@@ -101,6 +100,17 @@ auto TestBefore()
         expect( Result.begin() == Input.begin() );
     };
 }
+
+auto TestStrView_c_str()
+{
+    "TestStrView_c_str"_test = [] {
+    };
+    auto abc = std::string_view("abc");
+    auto kkk = std::array{'a','b','c','d'};
+    std::c_str(abc);
+
+}
+
 
 int main()
 {
