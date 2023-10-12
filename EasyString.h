@@ -300,13 +300,13 @@ namespace EasyString
         return [=]( StrView Pattern ) { return Split( Pattern ).By( Delimiter ); };
     }
 
-    template<std::integral INT_TYPE>
+    template<std::integral INT_TYPE, int BASE = 10>
     constexpr auto StrViewTo( StrView Source ) -> std::optional<INT_TYPE>
     {
         constexpr auto Successful = []( const std::from_chars_result& R ) { return R.ec == std::errc{}; };
         Source |= TrimSpace;
-        if( INT_TYPE Result;  //
-            Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result ) ) )
+        INT_TYPE Result;
+        if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result, BASE ) ) )  //
             return Result;
         return std::nullopt;
     }

@@ -8,6 +8,32 @@
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
 
+//helper functions
+namespace
+{
+    auto DecodeURLParameter( std::string& URL )
+    {
+        using EasyString::StrViewTo;
+
+        auto InputIt = URL.data();
+        auto OuputIt = InputIt;
+
+        char CurrentChar;
+        while( ( CurrentChar = *InputIt ) != '\0' )
+        {
+            if( CurrentChar == '+' )
+                CurrentChar = ' ';
+            else if( CurrentChar == '%' )
+                CurrentChar = StrViewTo<char, 16>( { ( ++InputIt )++, 2 } ).value_or( '?' );
+            *OuputIt++ = CurrentChar;
+            ++InputIt;
+        }
+
+        *OuputIt = '\0';
+        URL.resize( OuputIt - URL.data() );
+    }
+}  // namespace
+
 inline namespace EasyFCGI
 {
     using namespace EasyString;
@@ -104,6 +130,8 @@ inline namespace EasyFCGI
             );
         else
             R.QueryStringCache = getenv( "QUERY_STRING" );
+
+        DecodeURLParameter( R.QueryStringCache );
 
         R.Query = MapQueryString( R.QueryStringCache );
 
