@@ -57,15 +57,13 @@ namespace std
         auto Buffer = std::data( std::forward<T>( Source ) );
         auto Size = std::size( std::forward<T>( Source ) );
 
-        if( Buffer[Size] == '\0' )
-            return Buffer;
-        else
-        {
-            auto NewBuffer = new char[Size + 1];
-            std::copy_n( Buffer, Size, NewBuffer );
-            NewBuffer[Size] = '\0';
-            return std::unique_ptr<const char[]>{ NewBuffer };
-        }
+        if( Size == 0 ) return "";
+        if( Buffer[Size] == '\0' ) return Buffer;
+
+        auto NewBuffer = new char[Size + 1];
+        std::copy_n( Buffer, Size, NewBuffer );
+        NewBuffer[Size] = '\0';
+        return std::unique_ptr<const char[]>{ NewBuffer };
     }
 
 }  // namespace std

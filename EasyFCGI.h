@@ -55,7 +55,7 @@ inline namespace EasyFCGI
 
     namespace HTTP
     {
-        struct ReuqestMethod
+        struct RequestMethod
         {
             enum class VerbType { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH } Verb;
 
@@ -69,10 +69,10 @@ inline namespace EasyFCGI
 
             inline const static auto VerbToStrView = StrViewToVerb.Inverse();
 
-            constexpr ReuqestMethod() = default;
-            constexpr ReuqestMethod( const ReuqestMethod& ) = default;
-            constexpr ReuqestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
-            constexpr ReuqestMethod( std::convertible_to<std::string_view> auto VerbName )
+            constexpr RequestMethod() = default;
+            constexpr RequestMethod( const RequestMethod& ) = default;
+            constexpr RequestMethod( VerbType OtherVerb ) : Verb{ OtherVerb } {}
+            constexpr RequestMethod( std::convertible_to<std::string_view> auto VerbName )
                 : Verb{ StrViewToVerb[VerbName] }
             {}
 
@@ -82,32 +82,34 @@ inline namespace EasyFCGI
         };
     }  // namespace HTTP
 
-    // template<typename Json = nlohmann::json>
+    inline auto ReadParam( const char* BuffPtr ) -> std::string_view
+    {
+        auto LoadParamFromEnv = getenv( BuffPtr );
+        return LoadParamFromEnv ? LoadParamFromEnv : "";
+    }
+
+    inline auto ReadParam( std::string_view ParamName ) { return ReadParam( std::c_str( ParamName ) ); }
+
     using Json = nlohmann::json;
+
+    template<typename StorageEngine = nlohmann::json>
+    struct QueryExecutor
+    {
+        StorageEngine data;
+        auto operator[]( std::string_view Key ) const { return data[Key].dump(); }
+    };
+
+    // template<typename Json = nlohmann::json>
     struct FCGI_Request
     {
-        HTTP::ReuqestMethod RequestMethod;
+        HTTP::RequestMethod RequestMethod;
         std::size_t ContentLength;
         std::string_view ContentType;
         std::string_view ScriptName;
         std::string_view RequestURI;
         std::string_view QueryString;
-        std::string RequestBody;
-        Json Query;
-
-        auto ReadParam( const char* BuffPtr ) const -> std::string_view
-        {
-            auto LoadParamFromEnv = getenv( BuffPtr );
-            return LoadParamFromEnv ? LoadParamFromEnv : "No Content";
-        }
-
-        auto ReadParam( std::string_view ParamName ) const
-        {
-            if( ParamName.empty() ) return std::string_view{};
-            return ReadParam( std::c_str( ParamName ) );
-        }
-
-        // auto operator[]( std::string_view Key ) const { return QueryString[Key]; }
+        std::string_view RequestBody;
+        QueryExecutor<Json> Query;
     };
 
     inline auto QueryStringToJson( std::string_view Source )
@@ -125,32 +127,24 @@ inline namespace EasyFCGI
     {
         auto R = Json{};
 
-        auto ContentLength = StrViewTo<std::size_t>( getenv( "CONTENT_LENGTH" ) ).value_or( 0 );
-        auto RequestMethod = HTTP::ReuqestMethod( getenv( "REQUEST_METHOD" ) );
-        auto ContentType = StrView{ getenv( "CONTENT_TYPE" ) };
-        auto ScriptName = StrView{ getenv( "SCRIPT_NAME" ) };
-        auto RequestURI = StrView{ getenv( "REQUEST_URI" ) };
-        auto QueryString = StrView{ getenv( "QUERY_STRING" ) };
-        auto RequestBody = std::string{};
+        auto ContentLength = StrViewTo<std::size_t>( ReadParam( "CONTENT_LENGTH" ) ).value_or( 0 );
+        auto RequestMethod = HTTP::RequestMethod( ReadParam( "REQUEST_METHOD" ) );
+        auto ContentType = ReadParam( "CONTENT_TYPE" );
+        auto ScriptName = ReadParam( "SCRIPT_NAME" );
+        auto RequestURI = ReadParam( "REQUEST_URI" );
+        auto QueryString = ReadParam( "QUERY_STRING" );
+        auto RequestBody = ReadParam( "REQUEST_BODY" );
         auto Query = Json{};
 
         // ignore original request body in case of GET
-        if( RequestMethod == HTTP::ReuqestMethod::GET )
+        if( RequestMethod == HTTP::RequestMethod::GET )
             RequestBody = QueryString;
         else
-            RequestBody.resize_and_overwrite(  //
-                ContentLength,
-                []( char* Buffer, size_t BufferSize ) {  //
-                    return FCGI_fread( Buffer, sizeof( 1 [Buffer] ), BufferSize, FCGI_stdin );
-                }  //
-            );
+            QueryString = RequestBody;
 
-        // QueryString = RequestBody; // redirect pointer to local cache
-
-        if( ContentType == "application/x-www-form-urlencoded" || RequestMethod == HTTP::ReuqestMethod::GET )
-            Query = QueryStringToJson( RequestBody );
-        else
-            Query = Json::parse( RequestBody );
+        if( ContentType == "application/x-www-form-urlencoded" || RequestMethod == HTTP::RequestMethod::GET )
+            Query = QueryStringToJson( QueryString );
+        if( ContentType == "application/json" ) Query = Json::parse( RequestBody );
 
         return FCGI_Request{ .RequestMethod = RequestMethod,
                              .ContentLength = ContentLength,
@@ -159,7 +153,7 @@ inline namespace EasyFCGI
                              .RequestURI = RequestURI,
                              .QueryString = QueryString,
                              .RequestBody = RequestBody,
-                             .Query = Query };
+                             .Query = { Query } };
     }
 
     struct RequestQueue
