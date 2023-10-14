@@ -5,32 +5,34 @@
 #include <fcgi_stdio.h>
 #include <memory>
 
+#include "json.hpp"
 #include "BijectiveMap.hpp"
 #include "EasyString.h"
 
 //helper functions
 namespace
 {
-    auto DecodeURLParameter( std::string& URL )
+    [[nodiscard]] auto DecodeURLFragment( std::string_view Fragment )
     {
-        using EasyString::StrViewTo;
+        constexpr auto PlaceHolderWidth = 2;
+        auto Result = std::string{};
 
-        auto InputIt = URL.data();
-        auto OuputIt = InputIt;
+        auto InputIt = std::begin( Fragment );
+        auto EndIt = std::end( Fragment );
+        auto OutputIt = std::back_inserter( Result );
 
-        char CurrentChar;
-        while( ( CurrentChar = *InputIt ) != '\0' )
+        while( InputIt != EndIt )
         {
+            auto CurrentChar = *InputIt;
             if( CurrentChar == '+' )
                 CurrentChar = ' ';
-            else if( CurrentChar == '%' )
-                CurrentChar = StrViewTo<char, 16>( { ( ++InputIt )++, 2 } ).value_or( '?' );
-            *OuputIt++ = CurrentChar;
+            else if( CurrentChar == '%' && std::distance( InputIt, EndIt ) > PlaceHolderWidth )
+                CurrentChar = EasyString::StrViewTo<char, 16>( { ( ++InputIt )++, PlaceHolderWidth } ).value_or( '?' );
+            OutputIt = CurrentChar;
             ++InputIt;
         }
 
-        *OuputIt = '\0';
-        URL.resize( OuputIt - URL.data() );
+        return Result;
     }
 }  // namespace
 
@@ -80,62 +82,84 @@ inline namespace EasyFCGI
         };
     }  // namespace HTTP
 
+    // template<typename Json = nlohmann::json>
+    using Json = nlohmann::json;
     struct FCGI_Request
     {
         HTTP::ReuqestMethod RequestMethod;
-        size_t ContentLength;
+        std::size_t ContentLength;
         std::string_view ContentType;
         std::string_view ScriptName;
         std::string_view RequestURI;
-        std::string QueryStringCache;
-        BijectiveMap<std::string_view, std::string_view> Query;
+        std::string_view QueryString;
+        std::string RequestBody;
+        Json Query;
 
-        auto ReadParam( const char* BuffPtr ) const
+        auto ReadParam( const char* BuffPtr ) const -> std::string_view
         {
             auto LoadParamFromEnv = getenv( BuffPtr );
-            return std::string_view{ LoadParamFromEnv ? LoadParamFromEnv : "No Content" };
+            return LoadParamFromEnv ? LoadParamFromEnv : "No Content";
         }
 
-        auto ReadParam( std::string_view ParamName ) const { return ReadParam( std::c_str( ParamName ) ); }
+        auto ReadParam( std::string_view ParamName ) const
+        {
+            if( ParamName.empty() ) return std::string_view{};
+            return ReadParam( std::c_str( ParamName ) );
+        }
 
         // auto operator[]( std::string_view Key ) const { return QueryString[Key]; }
     };
 
-    inline auto MapQueryString( std::string_view Source )
+    inline auto QueryStringToJson( std::string_view Source )
     {
-        auto Result = BijectiveMap<std::string_view, std::string_view>{};
+        auto Result = Json{};
 
         for( auto Segment : Source | SplitBy( '&' ) )                        //
             for( auto [Key, Value] : Segment | SplitBy( '=' ) | Bundle<2> )  //
-                Result[Key] = Value;
+                Result[DecodeURLFragment( Key )] = DecodeURLFragment( Value );
 
         return Result;
     }
 
     inline auto NextRequest()
     {
-        auto R = FCGI_Request{};
-        R.ContentLength = std::atoi( getenv( "CONTENT_LENGTH" ) );
-        R.RequestMethod = getenv( "REQUEST_METHOD" );
-        R.ContentType = getenv( "CONTENT_TYPE" );
-        R.ScriptName = getenv( "SCRIPT_NAME" );
-        R.RequestURI = getenv( "REQUEST_URI" );
+        auto R = Json{};
 
-        if( R.RequestMethod == HTTP::ReuqestMethod::POST )
-            R.QueryStringCache.resize_and_overwrite(  //
-                R.ContentLength,
+        auto ContentLength = StrViewTo<std::size_t>( getenv( "CONTENT_LENGTH" ) ).value_or( 0 );
+        auto RequestMethod = HTTP::ReuqestMethod( getenv( "REQUEST_METHOD" ) );
+        auto ContentType = StrView{ getenv( "CONTENT_TYPE" ) };
+        auto ScriptName = StrView{ getenv( "SCRIPT_NAME" ) };
+        auto RequestURI = StrView{ getenv( "REQUEST_URI" ) };
+        auto QueryString = StrView{ getenv( "QUERY_STRING" ) };
+        auto RequestBody = std::string{};
+        auto Query = Json{};
+
+        // ignore original request body in case of GET
+        if( RequestMethod == HTTP::ReuqestMethod::GET )
+            RequestBody = QueryString;
+        else
+            RequestBody.resize_and_overwrite(  //
+                ContentLength,
                 []( char* Buffer, size_t BufferSize ) {  //
                     return FCGI_fread( Buffer, sizeof( 1 [Buffer] ), BufferSize, FCGI_stdin );
                 }  //
             );
+
+        // QueryString = RequestBody; // redirect pointer to local cache
+
+        if( ContentType == "application/x-www-form-urlencoded" || RequestMethod == HTTP::ReuqestMethod::GET )
+            Query = QueryStringToJson( RequestBody );
         else
-            R.QueryStringCache = getenv( "QUERY_STRING" );
+            Query = Json::parse( RequestBody );
 
-        DecodeURLParameter( R.QueryStringCache );
-
-        R.Query = MapQueryString( R.QueryStringCache );
-
-        return R;
+        return FCGI_Request{ .RequestMethod = RequestMethod,
+                             .ContentLength = ContentLength,
+                             .ContentType = ContentType,
+                             .ScriptName = ScriptName,
+                             .RequestURI = RequestURI,
+                             .QueryString = QueryString,
+                             .RequestBody = RequestBody,
+                             .Query = Query };
     }
 
     struct RequestQueue
