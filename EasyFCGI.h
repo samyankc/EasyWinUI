@@ -92,11 +92,11 @@ inline namespace EasyFCGI
 
     using Json = nlohmann::json;
 
-    template<typename StorageEngine = nlohmann::json>
+    template<typename StorageEngine>
     struct QueryExecutor
     {
-        StorageEngine data;
-        auto operator[]( std::string_view Key ) const { return data[Key].dump(); }
+        StorageEngine Json;
+        auto operator[]( std::string_view Key ) const { return Json[Key].dump(); }
     };
 
     // template<typename Json = nlohmann::json>
