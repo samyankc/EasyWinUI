@@ -96,7 +96,13 @@ inline namespace EasyFCGI
     struct QueryExecutor
     {
         StorageEngine Json;
-        auto operator[]( std::string_view Key ) const { return Json[Key].dump(); }
+        auto operator[]( std::string_view Key ) const
+        {
+            if( Json.contains( Key ) )
+                return Json[Key].dump();
+            else
+                return std::string{};
+        }
     };
 
     // template<typename Json = nlohmann::json>
