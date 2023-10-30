@@ -99,7 +99,7 @@ inline namespace EasyFCGI
         auto operator[]( std::string_view Key ) const
         {
             if( Json.contains( Key ) )
-                return Json[Key].dump();
+                return Json[Key].template get<std::string>();
             else
                 return std::string{};
         }
