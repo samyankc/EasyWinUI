@@ -298,14 +298,23 @@ namespace EasyString
         return [=]( StrView Pattern ) { return Split( Pattern ).By( Delimiter ); };
     }
 
-    template<std::integral INT_TYPE, int BASE = 10>
-    constexpr auto StrViewTo( StrView Source ) -> std::optional<INT_TYPE>
+    template<typename NumericType, int BASE = 10>
+    constexpr auto StrViewTo( StrView Source ) -> std::optional<NumericType>
     {
         constexpr auto Successful = []( const std::from_chars_result& R ) { return R.ec == std::errc{}; };
         Source |= TrimSpace;
-        INT_TYPE Result;
-        if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result, BASE ) ) )  //
-            return Result;
+        Source |= Trim( "+" );
+        NumericType Result;
+        if constexpr( std::integral<NumericType> )
+        {
+            if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result, BASE ) ) )  //
+                return Result;
+        }
+        else
+        {
+            if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result ) ) )  //
+                return Result;
+        }
         return std::nullopt;
     }
 
