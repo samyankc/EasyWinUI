@@ -1,9 +1,18 @@
-#include "boost-ext/ut.hpp"
+#ifdef UNIT_TEST
+#define main(...) UnitTest_Skip_This_Main(__VA_ARGS__)
+#define ParenOpen (
+#define ParenClose )
+#define UnitTest() main ParenOpen ParenClose
+#endif
+
 // #include "EasyMeta.h"
 #include <tuple>
 #include <string>
 // #include <typeinfo>
 
+#include "boost-ext/ut.hpp"
+using namespace boost::ut;
+using namespace boost::ut::literals;
 
 template<typename T>
 constexpr auto TypeName = []<typename U> {
@@ -30,4 +39,3 @@ constexpr auto MakeHomogeneousTuple( const auto&... Args )
 template<typename T, auto... Args>
 constexpr auto IntegralConstantTuple = std::tuple<std::integral_constant<T, static_cast<T>( Args )>...>{};
 
-// for supporting pipe semantic
