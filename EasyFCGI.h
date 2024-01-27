@@ -148,9 +148,12 @@ inline namespace EasyFCGI
         else
             QueryString = RequestBody;
 
-        if( ContentType == "application/x-www-form-urlencoded" || RequestMethod == HTTP::RequestMethod::GET )
+        if( ContentType == "application/json" )
+            Query = Json::parse( RequestBody );
+        else if( ContentType == "application/x-www-form-urlencoded" || RequestMethod == HTTP::RequestMethod::GET )
             Query = QueryStringToJson( QueryString );
-        if( ContentType == "application/json" ) Query = Json::parse( RequestBody );
+        else
+            Query = QueryStringToJson( QueryString );
 
         return FCGI_Request{ .RequestMethod = RequestMethod,
                              .ContentLength = ContentLength,
