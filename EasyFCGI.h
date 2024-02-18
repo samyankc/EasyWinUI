@@ -14,7 +14,7 @@ namespace
 {
     [[nodiscard]] auto DecodeURLFragment( std::string_view Fragment )
     {
-        constexpr auto PlaceHolderWidth = 2;
+        constexpr auto EncodeDigitWidth = 2;
         auto Result = std::string{};
 
         auto InputIt = std::begin( Fragment );
@@ -26,8 +26,9 @@ namespace
             auto CurrentChar = *InputIt;
             if( CurrentChar == '+' )
                 CurrentChar = ' ';
-            else if( CurrentChar == '%' && std::distance( InputIt, EndIt ) > PlaceHolderWidth )
-                CurrentChar = EasyString::StrViewTo<char, 16>( { ( ++InputIt )++, PlaceHolderWidth } ).value_or( '?' );
+            else if( CurrentChar == '%' && std::distance( InputIt, EndIt ) > EncodeDigitWidth )
+                CurrentChar = std::bit_cast<char>(
+                    EasyString::StrViewTo<unsigned char, 16>( { ( ++InputIt )++, EncodeDigitWidth } ).value_or( '?' ) );
             OutputIt = CurrentChar;
             ++InputIt;
         }
@@ -148,9 +149,10 @@ inline namespace EasyFCGI
         else
             QueryString = RequestBody;
 
-        if( ContentType == "application/json" )
+        if( ContentType.contains( "application/json" ) )
             Query = Json::parse( RequestBody );
-        else if( ContentType == "application/x-www-form-urlencoded" || RequestMethod == HTTP::RequestMethod::GET )
+        else if( RequestMethod == HTTP::RequestMethod::GET ||
+                 ContentType.contains( "application/x-www-form-urlencoded" ) )
             Query = QueryStringToJson( QueryString );
         else
             Query = QueryStringToJson( QueryString );
