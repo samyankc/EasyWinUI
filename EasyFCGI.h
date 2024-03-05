@@ -41,24 +41,39 @@ inline namespace EasyFCGI
 {
     using namespace EasyString;
 
+    template<typename T>
+    concept DumpingString = requires( T&& t ) {
+        {
+            t.dump()
+        } -> std::same_as<std::string>;
+    };
+
     template<typename... Args>
-    inline auto Send( std::format_string<Args...> fmt, Args&&... args )
+    [[deprecated( "Use FCGI_Request.Response instead" )]] inline auto Send( std::format_string<Args...> fmt,
+                                                                            Args&&... args )
     {
         return FCGI_puts( std::format( fmt, std::forward<Args>( args )... ).c_str() );
     }
 
-    inline auto Send( std::string_view Content ) { return FCGI_puts( std::c_str( Content ) ); }
+    [[deprecated( "Use FCGI_Request.Response instead" )]] inline auto Send( std::string_view Content )
+    {
+        return FCGI_puts( std::c_str( Content ) );
+    }
 
     template<typename T>
     concept HasSendableDump = requires( T t ) { Send( t.dump() ); };
 
-    inline auto Send( HasSendableDump auto&& Content ) { return Send( Content.dump() ); }
+    [[deprecated( "Use FCGI_Request.Response instead" )]] inline auto Send( HasSendableDump auto&& Content )
+    {
+        return Send( Content.dump() );
+    }
 
     namespace HTTP
     {
         struct RequestMethod
         {
-            enum class VerbType { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH } Verb;
+            enum class VerbType { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
+            VerbType Verb;
 
             using enum VerbType;
             inline const static auto StrViewToVerb = BijectiveMap<std::string_view, VerbType>  //
@@ -81,6 +96,97 @@ inline namespace EasyFCGI
 
             constexpr operator VerbType() const { return Verb; }
         };
+
+        enum class StatusCode : int {
+            OK = 200,
+            Created = 201,
+            Accepted = 202,
+            NoContent = 204,
+            BadRequest = 400,
+            Unauthorized = 401,
+            Forbidden = 403,
+            NotFound = 404,
+            MethodNotAllowed = 405,
+            UnsupportedMediaType = 415,
+            UnprocessableEntity = 422,
+            InternalServerError = 500,
+            NotImplemented = 501,
+            ServiceUnavailable = 503,
+        };
+
+        struct ContentType
+        {
+            enum class MimeType {
+                TEXT_PLAIN = 0,
+                TEXT_HTML,
+                TEXT_XML,
+                TEXT_CSV,
+                TEXT_CSS,
+                APPLICATION_JSON,
+                APPLICATION_X_WWW_FORM_URLENCODED,
+                APPLICATION_OCTET_STREAM,
+                MULTIPART_FORM_DATA,
+                MULTIPART_BYTERANGES,
+                UNKNOWN_MIME_TYPE,
+            };
+            MimeType Type;
+
+            using enum MimeType;
+
+            inline const static auto StrViewToType = BijectiveMap<std::string_view, MimeType>  //
+                {
+                    { "text/plain", TEXT_PLAIN },
+                    { "text/html", TEXT_HTML },
+                    { "text/xml", TEXT_XML },
+                    { "application/json", APPLICATION_JSON },
+                    { "application/x-www-form-urlencoded", APPLICATION_X_WWW_FORM_URLENCODED },
+                    { "application/octet-stream", APPLICATION_OCTET_STREAM },
+                    { "multipart/form-data", MULTIPART_FORM_DATA },
+                    { "multipart/byteranges", MULTIPART_BYTERANGES },
+                    { "", UNKNOWN_MIME_TYPE },
+                };
+            inline const static auto TypeToStrView = StrViewToType.Inverse();
+
+            struct Text;
+            struct Application;
+            struct MultiPart;
+
+            constexpr ContentType() = default;
+            constexpr ContentType( const ContentType& ) = default;
+            constexpr ContentType( MimeType Other ) : Type{ Other } {}
+            constexpr ContentType( std::convertible_to<std::string_view> auto TypeName )
+                : Type{ StrViewToType[Split( TypeName ).By( ';' ).front() | TrimSpace] }
+            {
+                // if( Type == UNKNOWN_MIME_TYPE ) Type = TEXT_PLAIN;
+            }
+
+            constexpr operator std::string_view() const { return TypeToStrView[Type]; }
+
+            constexpr operator MimeType() const { return Type; }
+        };
+
+        struct ContentType::Text
+        {
+            constexpr static ContentType Plain = TEXT_PLAIN;
+            constexpr static ContentType HTML = TEXT_HTML;
+            constexpr static ContentType XML = TEXT_XML;
+            constexpr static ContentType CSV = TEXT_CSV;
+            constexpr static ContentType CSS = TEXT_CSS;
+        };
+
+        struct ContentType::Application
+        {
+            constexpr static ContentType Json = APPLICATION_JSON;
+            constexpr static ContentType FormURLEncoded = APPLICATION_X_WWW_FORM_URLENCODED;
+            constexpr static ContentType OctetStream = APPLICATION_OCTET_STREAM;
+        };
+
+        struct ContentType::MultiPart
+        {
+            constexpr static ContentType FormData = MULTIPART_FORM_DATA;
+            constexpr static ContentType ByteRanges = MULTIPART_BYTERANGES;
+        };
+
     }  // namespace HTTP
 
     inline auto ReadParam( const char* BuffPtr ) -> std::string_view
@@ -90,6 +196,47 @@ inline namespace EasyFCGI
     }
 
     inline auto ReadParam( std::string_view ParamName ) { return ReadParam( std::c_str( ParamName ) ); }
+
+    struct FCGI_Response
+    {
+        HTTP::StatusCode StatusCode{ HTTP::StatusCode::OK };
+        HTTP::ContentType ContentType{ HTTP::ContentType::Text::Plain };
+        std::vector<std::string> Body;
+
+        auto& Set( HTTP::StatusCode NewValue ) { return StatusCode = NewValue; }
+        auto& Set( HTTP::ContentType NewValue ) { return ContentType = NewValue; }
+
+        template<typename T>
+        decltype( auto ) Append( T&& NewContent ) noexcept
+        {
+            if constexpr( DumpingString<T> )
+            {
+                Body.push_back( NewContent.dump() );
+            }
+            else
+            {
+                Body.push_back( std::forward<T>( NewContent ) );
+            }
+            return *this;
+        }
+
+        template<typename T>
+        decltype( auto ) operator+=( T && NewContent ) noexcept
+        {
+            return Append( std::forward<T>( NewContent ) );
+        }
+
+        template<typename T>
+        requires( ! std::same_as<std::remove_cvref_t<T>, FCGI_Response> )
+        decltype( auto ) operator=( T && NewContent ) noexcept
+        {
+            Body.clear();
+            return Append( std::forward<T>( NewContent ) );
+        }
+
+        template<typename T>
+        operator T() const { return {}; }
+    };
 
     using Json = nlohmann::json;
 
@@ -111,12 +258,28 @@ inline namespace EasyFCGI
     {
         HTTP::RequestMethod RequestMethod;
         std::size_t ContentLength;
-        std::string_view ContentType;
+        HTTP::ContentType ContentType;
         std::string_view ScriptName;
         std::string_view RequestURI;
         std::string_view QueryString;
         std::string_view RequestBody;
         QueryExecutor<Json> Query;
+        FCGI_Response Response;
+
+        ~FCGI_Request()
+        {
+            if( Response.StatusCode == HTTP::StatusCode::NoContent )
+            {
+                FCGI_puts( "Status: 204\r\n" );
+                return;
+            }
+            FCGI_puts( std::format( "Status: {}", std::to_underlying( Response.StatusCode ) ).c_str() );
+            FCGI_puts(
+                std::format( "Content-Type: {}; charset=UTF-8", std::string_view( Response.ContentType ) ).c_str() );
+            FCGI_putchar( '\r' );
+            FCGI_putchar( '\n' );
+            for( auto&& Buffer : Response.Body ) FCGI_puts( Buffer.c_str() );
+        }
     };
 
     inline auto QueryStringToJson( std::string_view Source )
@@ -130,13 +293,13 @@ inline namespace EasyFCGI
         return Result;
     }
 
-    inline auto NextRequest()
+    inline auto NextRequest() -> FCGI_Request
     {
         auto R = Json{};
 
         auto ContentLength = StrViewTo<std::size_t>( ReadParam( "CONTENT_LENGTH" ) ).value_or( 0 );
         auto RequestMethod = HTTP::RequestMethod( ReadParam( "REQUEST_METHOD" ) );
-        auto ContentType = ReadParam( "CONTENT_TYPE" );
+        auto ContentType = HTTP::ContentType( ReadParam( "CONTENT_TYPE" ) );
         auto ScriptName = ReadParam( "SCRIPT_NAME" );
         auto RequestURI = ReadParam( "REQUEST_URI" );
         auto QueryString = ReadParam( "QUERY_STRING" );
@@ -149,10 +312,20 @@ inline namespace EasyFCGI
         else
             QueryString = RequestBody;
 
-        if( ContentType.contains( "application/json" ) )
-            Query = Json::parse( RequestBody );
+        if( ContentType == HTTP::ContentType::Application::Json ) try
+            {
+                Query = Json::parse( RequestBody );
+            }
+            catch( const Json::parse_error& e )
+            {
+                FCGI_puts( "Status: 400\r\nContent-Type: text/plain\r\n" );
+                FCGI_puts( e.what() );
+                // skip this iteration and move on
+                if( FCGI_Accept() >= 0 ) return NextRequest();
+                return {};  // or terminate?
+            }
         else if( RequestMethod == HTTP::RequestMethod::GET ||
-                 ContentType.contains( "application/x-www-form-urlencoded" ) )
+                 ContentType == HTTP::ContentType::Application::FormURLEncoded )
             Query = QueryStringToJson( QueryString );
         else
             Query = QueryStringToJson( QueryString );
@@ -185,6 +358,7 @@ inline namespace EasyFCGI
         constexpr auto empty() const { return begin() == end(); }
         auto front() const { return NextRequest(); }
     };
+
 }  // namespace EasyFCGI
 
 // template<> inline constexpr bool std::ranges::enable_borrowed_range<EasyFCGI::RequestQueue> = true;

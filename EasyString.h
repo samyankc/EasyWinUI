@@ -285,6 +285,7 @@ namespace EasyString
                     return ! Text.ends_with( Delimiter )  // ending delim adjustment
                            + std::count( Text.begin(), Text.end(), Delimiter );
                 }
+                constexpr auto front() const { return *begin(); }
             };
 
             constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
@@ -485,6 +486,25 @@ namespace EasyString
     {
         // return FMT<FSTR>{};
         return []( auto&&... args ) { return std::format( FSTR, std::forward<decltype( args )>( args )... ); };
+    }
+
+    template<typename LeadingType, typename... Rest>
+    constexpr auto EmptyCoalesce( LeadingType&& LeadingArg, Rest&&... RestArg )
+    {
+        if( std::empty( LeadingArg ) )
+            if constexpr( sizeof...( Rest ) == 0 )
+                return LeadingType{};
+            else
+                return EmptyCoalesce( static_cast<LeadingType>( RestArg )... );
+        else
+            return std::forward<LeadingType>( LeadingArg );
+    }
+
+    inline auto ToLower( std::string_view Source )
+    {
+        auto Result = std::string( Source.length(), '\0' );
+        std::ranges::transform( Source, Result.begin(), ::tolower );
+        return Result;
     }
 
 }  // namespace EasyString
