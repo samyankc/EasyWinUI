@@ -2,6 +2,7 @@
 #define EASYSTRING_H
 
 #include <algorithm>
+#include <ranges>
 #include <cstring>
 #include <fstream>
 #include <string>
@@ -20,6 +21,21 @@ namespace
 
     template<typename T>
     concept NotProvide_c_str = ! Provide_c_str<T>;
+
+    template<typename F>
+    struct FunctionType : std::false_type
+    {};
+
+    template<typename R, typename... Args>
+    struct FunctionType<R( Args... )> : std::true_type
+    {};
+
+    template<typename R, typename... Args>
+    struct FunctionType<R ( * )( Args... )> : std::true_type
+    {};
+
+    template<typename F>
+    concept FunctionPointer = FunctionType<F>::value;
 
     using SafeCharPtrBase = std::variant<const char*, std::unique_ptr<const char[]>>;
     struct SafeCharPtr : SafeCharPtrBase
@@ -84,7 +100,7 @@ namespace EasyString
     }
 
     template<StrViewAdaptable T>
-    constexpr decltype( auto ) operator|( StrView Input, T && Adaptor ) noexcept
+    constexpr decltype( auto ) operator|( StrView Input, T&& Adaptor ) noexcept
     {
         return std::forward<T>( Adaptor )( Input );
     }
@@ -239,7 +255,7 @@ namespace EasyString
         return Impl{ Pattern };
     }
 
-    constexpr auto Split( StrView Pattern )
+    constexpr auto Split__deprecated( StrView Pattern )
     {
         struct Impl : StrViewUnit
         {
@@ -286,6 +302,7 @@ namespace EasyString
                            + std::count( Text.begin(), Text.end(), Delimiter );
                 }
                 constexpr auto front() const { return *begin(); }
+                constexpr auto front() const { return *begin(); }
             };
 
             constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
@@ -294,7 +311,63 @@ namespace EasyString
         return Impl{ Pattern };
     }
 
-    constexpr auto SplitBy( char Delimiter )
+    constexpr auto Split( StrView Pattern )
+    {
+        struct Impl : StrViewUnit
+        {
+            using DelimiterType = std::string_view;
+            struct InternalItorSentinel
+            {};
+
+            struct InternalItor : StrViewUnit
+            {
+                DelimiterType Delimiter;
+
+                constexpr auto operator*() const
+                {
+                    return StrView{ Text.begin(), Search( Delimiter ).In( Text ).begin() };
+                }
+
+                constexpr auto operator!=( InternalItorSentinel ) const { return ! Text.empty(); }
+                constexpr auto& operator++()
+                {
+                    auto DelimiterPos = Search( Delimiter ).In( Text ).begin();
+                    if( DelimiterPos == Text.end() )
+                        Text.remove_prefix( Text.length() );
+                    else
+                        Text = StrView{ DelimiterPos + Delimiter.length(), Text.end() };
+                    return *this;
+                }
+                constexpr auto operator++( int )
+                {
+                    auto CacheIt = *this;
+                    this->operator++();
+                    return CacheIt;
+                }
+            };
+
+            struct InternalRange : StrViewUnit
+            {
+                DelimiterType Delimiter;
+
+                constexpr auto begin() const { return InternalItor{ Text, Delimiter }; }
+                constexpr auto end() const { return InternalItorSentinel{}; }
+                constexpr auto size() const
+                {
+                    return ! Text.ends_with( Delimiter )  // ending delim adjustment
+                           + Count( Delimiter ).In( Text );
+                }
+                constexpr auto front() const { return *begin(); }
+            };
+
+            constexpr auto By( DelimiterType Delimiter ) const { return InternalRange{ Text, Delimiter }; }
+            constexpr auto operator()( DelimiterType Delimiter ) const { return By( Delimiter ); }
+        };
+
+        return Impl{ Pattern };
+    }
+
+    constexpr auto SplitBy( std::string_view Delimiter )
     {
         return [=]( StrView Pattern ) { return Split( Pattern ).By( Delimiter ); };
     }
@@ -312,7 +385,7 @@ namespace EasyString
                 return Result;
         }
         else
-        {
+        {  // floating point
             if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result ) ) )  //
                 return Result;
         }
@@ -329,7 +402,7 @@ namespace EasyString
         using ValueType = std::decay_t<decltype( *std::begin( Container ) )>;
         auto Result = std::array<ValueType, N>{};
         auto It = std::begin( Container );
-        for( auto i = size_t{ 0 }; i < N; ++i ) Result[i] = *It++;
+        for( auto i = size_t{ 0 }; i < std::max( N, std::size( Container ) ); ++i ) Result[i] = *It++;
         return std::array<std::array<ValueType, N>, 1>{ Result };
     }
 
@@ -454,15 +527,126 @@ namespace EasyString
         }
     };
 
-    inline constexpr auto operator+( const std::string& LHS, const StrView& RHS ) -> std::string  //
+    struct Skip
     {
-        return LHS + std::string{ RHS };
-    }
+        int N;
 
-    inline constexpr auto operator+( const StrView& LHS, const auto& RHS ) -> std::string  //
+        template<typename AncestorRange>
+        struct InternalRange
+        {
+            AncestorRange BaseRange;
+            int N;
+            auto begin()
+            {
+                auto Begin = std::begin( BaseRange );
+                auto End = std::end( BaseRange );
+                while( N-- > 0 && Begin != End ) ++Begin;
+                return Begin;
+            }
+            auto end() { return std::end( BaseRange ); }
+        };
+
+        friend auto operator|( auto SourceRange, const Skip& Adaptor )
+        {
+            return InternalRange{ SourceRange, Adaptor.N };
+        }
+    };
+
+    template<typename FirstRange, typename SecondRange>
+    struct Zip
     {
-        return std::string{ LHS } + RHS;
-    }
+        using FirstIterType = decltype( std::begin( std::declval<FirstRange>() ) );
+        using FirstSentinelType = decltype( std::end( std::declval<FirstRange>() ) );
+        using SecondIterType = decltype( std::begin( std::declval<SecondRange>() ) );
+        using SecondSentinelType = decltype( std::end( std::declval<SecondRange>() ) );
+
+        FirstIterType FirstBegin;
+        SecondIterType SecondBegin;
+
+        FirstSentinelType FirstEnd;
+        SecondSentinelType SecondEnd;
+
+        constexpr Zip() = delete;
+        constexpr Zip( auto&& ) = delete;
+        constexpr Zip( const Zip& ) = default;
+        constexpr Zip( const FirstRange& FR, const SecondRange& SR )
+            : FirstBegin{ std::begin( FR ) },
+              SecondBegin{ std::begin( SR ) },
+              FirstEnd{ std::end( FR ) },
+              SecondEnd{ std::end( SR ) }
+        {}
+
+        struct Sentinel
+        {};
+
+        friend auto operator!=( const Zip& Iter, const Sentinel& )
+        {
+            return Iter.FirstBegin != Iter.FirstEnd && Iter.SecondBegin != Iter.SecondEnd;
+        }
+        friend auto operator!=( const Sentinel& S, const Zip& Iter ) { return Iter != S; }
+
+        auto& operator++()
+        {
+            ++FirstBegin;
+            ++SecondBegin;
+            return *this;
+        }
+
+        auto operator*() const { return std::pair{ *FirstBegin, *SecondBegin }; }
+
+        auto begin() const { return *this; }
+        auto end() const { return Sentinel{}; }
+    };
+
+    struct SliceAt
+    {
+        int N;
+
+        friend auto operator|( auto SourceRange, const SliceAt& Adaptor )
+        {
+            return std::tuple{ SourceRange | Take( Adaptor.N ), SourceRange | Skip( Adaptor.N ) };
+        }
+
+        friend constexpr auto operator|( std::string_view SourceRange, const SliceAt& Adaptor )
+        {
+            auto Begin = SourceRange.begin();
+            auto End = SourceRange.end();
+            if( std::size( SourceRange ) >= Adaptor.N )
+                return std::array{ std::string_view{ Begin, Begin + 2 }, std::string_view{ Begin + 2, End } };
+            else
+                return std::array{ SourceRange, std::string_view{ End, End } };
+        }
+    };
+
+    struct ReplaceChar
+    {
+        char OriginalChar;
+
+        struct With
+        {
+            char OriginalChar;
+            char ReplacementChar;
+
+            friend auto operator|( std::string_view SourceRange, const struct With& Adaptor )
+            {
+                auto Result = std::string{ SourceRange };
+                std::ranges::replace( Result, Adaptor.OriginalChar, Adaptor.ReplacementChar );
+                return Result;
+            }
+        };
+
+        constexpr auto With( char ReplacementChar ) const { return ( struct With ){ OriginalChar, ReplacementChar }; };
+    };
+
+    // inline constexpr auto operator+( const std::string& LHS, const StrView& RHS ) -> std::string  //
+    // {
+    //     return LHS + std::string{ RHS };
+    // }
+
+    // inline constexpr auto operator+( const StrView& LHS, const auto& RHS ) -> std::string  //
+    // {
+    //     return std::string{ LHS } + RHS;
+    // }
 
     template<std::size_t N, typename CharT = char>
     struct FixedString
@@ -491,25 +675,56 @@ namespace EasyString
     template<typename LeadingType, typename... Rest>
     constexpr auto EmptyCoalesce( LeadingType&& LeadingArg, Rest&&... RestArg )
     {
-        if( std::empty( LeadingArg ) )
-            if constexpr( sizeof...( Rest ) == 0 )
-                return LeadingType{};
-            else
-                return EmptyCoalesce( static_cast<LeadingType>( RestArg )... );
+        if( ! std::empty( LeadingArg ) ) return std::forward<LeadingType>( LeadingArg );
+
+        if constexpr( sizeof...( Rest ) == 0 )
+            return LeadingType{};
         else
-            return std::forward<LeadingType>( LeadingArg );
+            return EmptyCoalesce( static_cast<LeadingType>( RestArg )... );
     }
 
-    inline auto ToLower( std::string_view Source )
+    struct ToLowerCallableType
     {
-        auto Result = std::string( Source.length(), '\0' );
-        std::ranges::transform( Source, Result.begin(), ::tolower );
-        return Result;
-    }
+        constexpr static auto operator()( char C )
+        {
+            if( 'A' <= C && C <= 'Z' ) C += 'a' - 'A';
+            return C;
+        }
+        constexpr static auto operator()( std::string_view Source )
+        {
+            auto Result = std::string( Source.length(), '\0' );
+            std::ranges::transform( Source, Result.begin(), ToLowerCallableType{} );
+            return Result;
+        }
+
+        template<FunctionPointer F>
+        constexpr operator F() const
+        {
+            return operator();
+        }
+    };
+    constexpr auto ToLower = ToLowerCallableType{};
+
+    struct CaseInsensitiveEqualCallableType
+    {
+        constexpr static bool Equal_impl( char LHS, char RHS ) { return ToLower( LHS ) == ToLower( RHS ); }
+        constexpr static bool operator()( char LHS, char RHS ) { return Equal_impl( LHS, RHS ); }
+        constexpr static bool operator()( auto P ) { return Equal_impl( std::get<0>( P ), std::get<1>( P ) ); }
+        constexpr static bool operator()( std::string_view LHS, std::string_view RHS )
+        {
+            if( LHS.length() != RHS.length() ) return false;
+            // return std::ranges::all_of( std::views::zip( LHS, RHS ), CaseInsensitiveEqualCallableType{} );
+            for( auto [a, b] : Zip( LHS, RHS ) )
+                if( ! Equal_impl( a, b ) ) return false;
+            return true;
+        }
+    };
+
+    constexpr auto CaseInsensitiveEqual = CaseInsensitiveEqualCallableType{};
 
 }  // namespace EasyString
 
 using EasyString::operator""_FMT;
-using EasyString::operator+;  // NOLINT
+// using EasyString::operator+;  // NOLINT
 
 #endif
