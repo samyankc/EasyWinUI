@@ -273,82 +273,6 @@ inline namespace EasyFCGI
     constexpr auto TempPathTemplate = "/dev/shm/XXXXXX"sv;
     constexpr auto TempPathTemplatePrefix = TempPathTemplate | Before( "XXXXXX" );
 
-    struct FCGI_Response
-    {
-        HTTP::StatusCode StatusCode{ HTTP::StatusCode::OK };
-        HTTP::ContentType ContentType{ HTTP::ContentType::Text::Plain };
-        std::vector<std::string> Body;
-
-        auto& Set( HTTP::StatusCode NewValue ) { return StatusCode = NewValue; }
-        auto& Set( HTTP::ContentType NewValue ) { return ContentType = NewValue; }
-
-<<<<<<< Updated upstream
-=======
-        auto Reset()
-        {
-            Set( HTTP::StatusCode::OK );
-            Set( HTTP::ContentType::Text::Plain );
-            Body.clear();
-        }
-
->>>>>>> Stashed changes
-        template<typename T>
-        decltype( auto ) Append( T&& NewContent ) noexcept
-        {
-            if constexpr( DumpingString<T> )
-            {
-                Body.push_back( NewContent.dump() );
-            }
-            else
-            {
-<<<<<<< Updated upstream
-                Body.push_back( std::forward<T>( NewContent ) );
-=======
-                Body.push_back( static_cast<std::string>( std::forward<T>( NewContent ) ) );
->>>>>>> Stashed changes
-            }
-            return *this;
-        }
-
-        template<typename T>
-<<<<<<< Updated upstream
-        decltype( auto ) operator+=( T && NewContent ) noexcept
-=======
-        decltype( auto ) operator+=( T&& NewContent ) noexcept
->>>>>>> Stashed changes
-        {
-            return Append( std::forward<T>( NewContent ) );
-        }
-
-        template<typename T>
-        requires( ! std::same_as<std::remove_cvref_t<T>, FCGI_Response> )
-<<<<<<< Updated upstream
-        decltype( auto ) operator=( T && NewContent ) noexcept
-=======
-        decltype( auto ) operator=( T&& NewContent ) noexcept
->>>>>>> Stashed changes
-        {
-            Body.clear();
-            return Append( std::forward<T>( NewContent ) );
-        }
-
-<<<<<<< Updated upstream
-        template<typename T>
-        operator T() const { return {}; }
-    };
-
-=======
-        template<std::default_initializable T>
-        operator T() const
-        {
-            return {};
-        }
-    };
-
-    constexpr auto TempPathTemplate = "/dev/shm/XXXXXX"sv;
-    constexpr auto TempPathTemplatePrefix = TempPathTemplate | Before( "XXXXXX" );
-
->>>>>>> Stashed changes
     using Json = nlohmann::json;
 
     template<typename StorageEngine>
@@ -468,39 +392,6 @@ inline namespace EasyFCGI
             //     RequestBody = RequestBodyCache | Trim( "\r\n" ) | TrimSpace;
             // }
 
-        // ignore original request body in case of GET
-        if( RequestMethod == HTTP::RequestMethod::GET )
-            RequestBody = QueryString;
-        else
-            QueryString = RequestBody;
-
-        if( ContentType == HTTP::ContentType::Application::Json ) try
-            {
-                Query = Json::parse( RequestBody );
-            }
-            catch( const Json::parse_error& e )
-            {
-                FCGI_puts( "Status: 400\r\nContent-Type: text/plain\r\n" );
-                FCGI_puts( e.what() );
-                // skip this iteration and move on
-                if( FCGI_Accept() >= 0 ) return NextRequest();
-                return {};  // or terminate?
-            }
-        else if( RequestMethod == HTTP::RequestMethod::GET ||
-                 ContentType == HTTP::ContentType::Application::FormURLEncoded )
-            Query = QueryStringToJson( QueryString );
-        else
-            Query = QueryStringToJson( QueryString );
-
-        return FCGI_Request{ .RequestMethod = RequestMethod,
-                             .ContentLength = ContentLength,
-                             .ContentType = ContentType,
-                             .ScriptName = ScriptName,
-                             .RequestURI = RequestURI,
-                             .QueryString = QueryString,
-                             .RequestBody = RequestBody,
-                             .Query = { Query } };
-    }
             // ignore original request body in case of GET
             switch( RequestMethod )
             {
