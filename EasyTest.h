@@ -2,7 +2,7 @@
 #define main(...) UnitTest_Skip_This_Main(__VA_ARGS__)
 #define ParenOpen (
 #define ParenClose )
-#define UnitTest() main ParenOpen ParenClose
+#define UnitTest(...) main ParenOpen __VA_ARGS__ ParenClose
 #endif
 
 // #include "EasyMeta.h"
