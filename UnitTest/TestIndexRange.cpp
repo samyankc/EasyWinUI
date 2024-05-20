@@ -15,12 +15,10 @@ int main()
     return 0;
 }
 
-int UnitTest()
+auto UnitTest() -> void
 {
     "Dummy"_test = [] {  //
-        expect(1_i == 1);
-        expect(1_i == 2);
+        expect( 1_i == 1 );
+        expect( 1_i == 2 );
     };
-
-    return 0;
 }
