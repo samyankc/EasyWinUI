@@ -1,4 +1,5 @@
 #include "../index_range_deducing_this.h"
+// #include "../index_range.h"
 #include "../EasyTest.h"
 #include <print>
 
@@ -10,7 +11,13 @@ int main()
 
     for( auto i : Range( 1, 10 ) ) std::println( "{},", i );
 
-    for( auto i : Range( 3, 20 ) | Drop( 2 ) | Reverse | Drop( 3 ) | Reverse | Take( 5 ) ) std::println( "{},", i );
+    for( auto i : Range( 3, 20 )   //
+                      | Drop( 2 )  //
+                      | Reverse    //
+                      | Drop( 3 )  //
+                      | Reverse    //
+                      | Take( 5 ) )
+        std::println( "{},", i );
 
     return 0;
 }
