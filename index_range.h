@@ -9,7 +9,12 @@
 
 namespace IndexRange
 {
-    template<typename BaseIter>  //
+    template<typename DataType>  //
+    struct IteratorData
+    {
+        DataType Current{};
+    };
+
     struct IteratorMachinery
     {
         constexpr decltype( auto ) operator++( this auto&& Self ) { return FWD_( Self ) += 1; }
@@ -19,36 +24,29 @@ namespace IndexRange
         constexpr auto operator-( this auto Self, int N ) { return Self += -N, Self; }
 
         template<typename SelfType, typename OtherType>  //
-        requires std::same_as<std::remove_cvref_t<SelfType>, std::remove_cvref_t<OtherType>>
+        // requires std::same_as<std::remove_cvref_t<SelfType>, std::remove_cvref_t<OtherType>>
         constexpr auto operator!=( this const SelfType& Self, const OtherType& Other )
         {
             return Self.Current != Other.Current;
         }
-
-        BaseIter Current;
     };
 
     template<std::integral IntegralType>  //
-    struct SelfReferencing : IteratorMachinery<IntegralType>
+    struct SelfReferencing : IteratorData<IntegralType>, IteratorMachinery
     {
-        constexpr SelfReferencing( IntegralType N ) : IteratorMachinery<IntegralType>( N ) {}
         constexpr auto operator*( this auto Self ) { return Self.Current; }
-        constexpr decltype( auto ) operator+=( this auto&& Self, IntegralType N )
-        {
-            Self.Current += N;
-            return FWD_( Self );
-        }
+        constexpr decltype( auto ) operator+=( this auto&& Self, IntegralType N ) { return Self.Current += N, FWD_( Self ); }
     };
 
     template<typename BaseIter>  //
-    struct Iterator : IteratorMachinery<BaseIter>
+    struct Iterator : IteratorData<BaseIter>, IteratorMachinery
     {
         constexpr decltype( auto ) operator*( this auto&& Self ) { return *Self.Current; }
         constexpr decltype( auto ) operator+=( this auto&& Self, int N ) { return Self.Current += N, FWD_( Self ); }
     };
 
     template<typename BaseIter>  //
-    struct ReverseIterator : IteratorMachinery<BaseIter>
+    struct ReverseIterator : IteratorData<BaseIter>, IteratorMachinery
     {
         constexpr decltype( auto ) operator*( this auto&& Self ) { return *( Self.Current - 1 ); }
         constexpr decltype( auto ) operator+=( this auto&& Self, int N ) { return Self.Current += -N, FWD_( Self ); }
@@ -57,7 +55,7 @@ namespace IndexRange
     template<typename Iter>  //
     struct ForwardRange
     {
-        constexpr ForwardRange( Iter Begin, Iter End ) : Begin( Begin ), End( End ) {}
+        constexpr ForwardRange( Iter Begin, Iter End ) : Begin{ Begin }, End{ End } {}
         constexpr auto begin() const { return Begin; }
         constexpr auto end() const { return End; }
 
@@ -66,17 +64,17 @@ namespace IndexRange
         Iter End;
     };
 
-    template<typename Iter>  //
-    struct ReverseRange : ForwardRange<ReverseIterator<Iter>>
+    template<typename Iter, typename RIter = ReverseIterator<Iter>>  //
+    struct ReverseRange : ForwardRange<RIter>
     {
-        constexpr ReverseRange( Iter Begin, Iter End ) : ForwardRange<ReverseIterator<Iter>>( { End }, { Begin } ) {}
+        constexpr ReverseRange( Iter Begin, Iter End ) : ForwardRange<RIter>( { { End } }, { { Begin } } ) {}
     };
 
     template<std::integral IndexType = int, typename Iter = SelfReferencing<IndexType>>  //
     struct Range : ForwardRange<Iter>
     {
-        constexpr Range( IndexType First, IndexType Last ) : ForwardRange<Iter>( First, Last + 1 ) {}
-        constexpr Range( IndexType Distance ) : Range( IndexType{ 0 }, Distance - 1 ) {}
+        constexpr Range( IndexType First, IndexType Last ) : ForwardRange<Iter>{ { First }, { Last + 1 } } {}
+        constexpr Range( IndexType Distance ) : Range{ IndexType{}, { Distance - 1 } } {}
     };
 
     constexpr static struct Reverse
