@@ -7,13 +7,12 @@ namespace SQL = pqxx;
 
 namespace pqxx  // inject helper class
 {
-
     template<size_t ParameterCount, size_t ExpectedRowCount = std::numeric_limits<size_t>::max()>
     struct PreparedStatement
     {
         static auto UniquePreparedStatmentName()
         {
-            static size_t UniqueID = 1000;
+            static auto UniqueID = 1000uz;
             return std::format( "PreparedStatement_{}_{}_{}_", ParameterCount, ExpectedRowCount, ++UniqueID );
         }
 
@@ -35,7 +34,7 @@ namespace pqxx  // inject helper class
             auto Tx = SQL::work{ AssociatedConnection };
             auto TxCommitGuard = std::unique_ptr<decltype( Tx ), decltype( []( auto* P ) { P->commit(); } )>( &Tx );
 
-            if constexpr( ExpectedRowCount == std::numeric_limits<size_t>::max() )
+            if constexpr( ExpectedRowCount == std::numeric_limits<size_t>::max() )  //
             {
                 return Tx.exec_prepared( Name, std::forward<Ts>( Args )... );
             }
@@ -59,5 +58,17 @@ namespace pqxx  // inject helper class
                 }
         }
     };
+
+    struct EasyConnection : SQL::connection
+    {
+        using SQL::connection::connection;
+
+        template<size_t ParameterCount, size_t ExpectedRowCount = std::numeric_limits<size_t>::max()>
+        [[nodiscard]] auto PrepareStatement( SQL::zview Statement )
+        {
+            return PreparedStatement<ParameterCount, ExpectedRowCount>( *this, Statement );
+        }
+    };
+
 }  // namespace pqxx
 #endif

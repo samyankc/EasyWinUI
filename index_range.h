@@ -2,7 +2,6 @@
 #define INDEXRANGE_H
 
 #include <concepts>
-// #include <type_traits>
 #include <utility>
 
 #define FWD_( SELF ) std::forward<decltype( SELF )>( SELF )

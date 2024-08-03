@@ -15,12 +15,14 @@ namespace
 {
     using namespace EasyString;
 
-    [[nodiscard]] auto HexToChar( std::string_view HexString ) noexcept
+    [[nodiscard]]
+    auto HexToChar( std::string_view HexString ) noexcept
     {
         return std::bit_cast<char>( StrViewTo<unsigned char, 16>( HexString ).value_or( '?' ) );
     }
 
-    [[nodiscard]] auto DecodeURLFragment( std::string_view Fragment )
+    [[nodiscard]]
+    auto DecodeURLFragment( std::string_view Fragment )
     {
         constexpr auto EncodeDigitWidth = 2;
         auto RestoreSpaceChar = ReplaceChar( '+' ).With( ' ' );
@@ -38,8 +40,7 @@ namespace
         return Result;
     }
 
-    template<auto Deleter, typename T>
-    constexpr auto ResourceGuard( T* Resource )
+    template<auto Deleter, typename T> constexpr auto ResourceGuard( T* Resource )
     {
         using DeleterType = decltype( []( T* p ) {
             if( p != NULL ) Deleter( p );
@@ -59,13 +60,14 @@ inline namespace EasyFCGI
     };
 
     template<typename... Args>
-    [[deprecated( "Use FCGI_Request.Response instead" )]] inline auto Send( std::format_string<Args...> fmt,
-                                                                            Args&&... args )
+    [[deprecated( "Use FCGI_Request.Response instead" )]]
+    inline auto Send( std::format_string<Args...> fmt, Args&&... args )
     {
         return FCGI_puts( std::format( fmt, std::forward<Args>( args )... ).c_str() );
     }
 
-    [[deprecated( "Use FCGI_Request.Response instead" )]] inline auto Send( std::string_view Content )
+    [[deprecated( "Use FCGI_Request.Response instead" )]]
+    inline auto Send( std::string_view Content )
     {
         return FCGI_puts( std::c_str( Content ) );
     }
@@ -73,7 +75,8 @@ inline namespace EasyFCGI
     template<typename T>
     concept HasSendableDump = requires( T t ) { Send( t.dump() ); };
 
-    [[deprecated( "Use FCGI_Request.Response instead" )]] inline auto Send( HasSendableDump auto&& Content )
+    [[deprecated( "Use FCGI_Request.Response instead" )]]
+    inline auto Send( HasSendableDump auto&& Content )
     {
         return Send( Content.dump() );
     }
@@ -96,10 +99,10 @@ inline namespace EasyFCGI
             ValueOption Verb;
 
             using enum ValueOption;
-            inline const static auto StrViewToVerb = BijectiveMap<std::string_view, ValueOption>  //
-                {                                                                                 //
-                  { "GET", GET },  { "POST", POST },    { "CONNECT", CONNECT }, { "TRACE", TRACE },
-                  { "PUT", PUT },  { "HEAD", HEAD },    { "OPTIONS", OPTIONS }, { "PATCH", PATCH },
+            inline const static auto StrViewToVerb = BijectiveMap<std::string_view, ValueOption>     //
+                {                                                                                    //
+                  { "GET", GET },  { "POST", POST },    { "CONNECT", CONNECT }, { "TRACE", TRACE },  //
+                  { "PUT", PUT },  { "HEAD", HEAD },    { "OPTIONS", OPTIONS }, { "PATCH", PATCH },  //
                   { "", INVALID }, { "DELETE", DELETE }
                 };
 
@@ -108,9 +111,7 @@ inline namespace EasyFCGI
             constexpr RequestMethod() = default;
             constexpr RequestMethod( const RequestMethod& ) = default;
             constexpr RequestMethod( ValueOption OtherVerb ) : Verb{ OtherVerb } {}
-            constexpr RequestMethod( std::convertible_to<std::string_view> auto VerbName )
-                : Verb{ StrViewToVerb[VerbName] }
-            {}
+            constexpr RequestMethod( std::convertible_to<std::string_view> auto VerbName ) : Verb{ StrViewToVerb[VerbName] } {}
 
             constexpr operator std::string_view() const { return VerbToStrView[Verb]; }
             constexpr auto EnumLiteral() const { return VerbToStrView[Verb]; }
@@ -175,8 +176,7 @@ inline namespace EasyFCGI
             constexpr ContentType() = default;
             constexpr ContentType( const ContentType& ) = default;
             constexpr ContentType( ValueOption Other ) : Type{ Other } {}
-            constexpr ContentType( std::convertible_to<std::string_view> auto TypeName )
-                : Type{ StrViewToType[Split( TypeName ).By( ";" ).front() | TrimSpace] }
+            constexpr ContentType( std::convertible_to<std::string_view> auto TypeName ) : Type{ StrViewToType[Split( TypeName ).By( ";" ).front() | TrimSpace] }
             {
                 // if( Type == UNKNOWN_MIME_TYPE ) Type = TEXT_PLAIN;
             }
@@ -235,39 +235,23 @@ inline namespace EasyFCGI
             Body.clear();
         }
 
-        template<typename T>
-        decltype( auto ) Append( T&& NewContent ) noexcept
+        template<typename T> decltype( auto ) Append( T&& NewContent ) noexcept
         {
-            if constexpr( DumpingString<T> )
-            {
-                Body.push_back( NewContent.dump() );
-            }
-            else
-            {
-                Body.push_back( static_cast<std::string>( std::forward<T>( NewContent ) ) );
-            }
+            if constexpr( DumpingString<T> ) { Body.push_back( NewContent.dump() ); }
+            else { Body.push_back( static_cast<std::string>( std::forward<T>( NewContent ) ) ); }
             return *this;
         }
 
-        template<typename T>
-        decltype( auto ) operator+=( T&& NewContent ) noexcept
-        {
-            return Append( std::forward<T>( NewContent ) );
-        }
+        template<typename T> decltype( auto ) operator+=( T&& NewContent ) noexcept { return Append( std::forward<T>( NewContent ) ); }
 
-        template<typename T>
-        requires( ! std::same_as<std::remove_cvref_t<T>, FCGI_Response> )
+        template<typename T> requires( ! std::same_as<std::remove_cvref_t<T>, FCGI_Response> )
         decltype( auto ) operator=( T&& NewContent ) noexcept
         {
             Body.clear();
             return Append( std::forward<T>( NewContent ) );
         }
 
-        template<std::default_initializable T>
-        operator T() const
-        {
-            return {};
-        }
+        template<std::default_initializable T> operator T() const { return {}; }
     };
 
     constexpr auto TempPathTemplate = "/dev/shm/XXXXXX"sv;
@@ -275,17 +259,14 @@ inline namespace EasyFCGI
 
     using Json = nlohmann::json;
 
-    template<typename StorageEngine>
-    struct QueryExecutor
+    template<typename StorageEngine> struct QueryExecutor
     {
         StorageEngine Json;
         auto contains( std::string_view Key ) const { return Json.contains( Key ); }
         auto operator[]( std::string_view Key ) const
         {
-            if( Json.contains( Key ) )
-                return Json[Key].template get<std::string>();
-            else
-                return std::string{};
+            if( Json.contains( Key ) ) return Json[Key].template get<std::string>();
+            else return std::string{};
         }
     };
 
@@ -318,10 +299,7 @@ inline namespace EasyFCGI
 
         auto FlushResponse() -> void
         {
-            if( Response.StatusCode == HTTP::StatusCode::NoContent )
-            {
-                FCGI_puts( "Status: 204\r\n" );
-            }
+            if( Response.StatusCode == HTTP::StatusCode::NoContent ) { FCGI_puts( "Status: 204\r\n" ); }
             else
             {
                 FCGI_puts( "Status: {}"_FMT( std::to_underlying( Response.StatusCode ) ).c_str() );
@@ -339,9 +317,9 @@ inline namespace EasyFCGI
             namespace fs = std::filesystem;
             for( auto&& [Key, Entry] : Query.Json.items() )
                 if( Entry.contains( QueryKey::FileUpload::TemporaryPath ) )
-                    if( auto PathString = Entry[QueryKey::FileUpload::TemporaryPath].get<std::string>();
+                    if( auto PathString = Entry[QueryKey::FileUpload::TemporaryPath].get<std::string>();  //
                         PathString.contains( TempPathTemplatePrefix ) )
-                        if( auto Path = fs::path( PathString );  //
+                        if( auto Path = fs::path( PathString );                                           //
                             fs::exists( Path ) )
                             fs::remove( Path );
         }
@@ -375,7 +353,7 @@ inline namespace EasyFCGI
             // $request_body for fcgi has very low size limit (<64k)
 
             auto RequestBodyCache = std::string{};
-            RequestBodyCache.resize_and_overwrite(  //
+            RequestBodyCache.resize_and_overwrite(       //
                 ContentLength,
                 []( char* Buffer, size_t BufferSize ) {  //
                     // reading request body from FCGI_stdin is only affected by client_max_body_size
@@ -395,17 +373,17 @@ inline namespace EasyFCGI
             // ignore original request body in case of GET
             switch( RequestMethod )
             {
-                case HTTP::RequestMethod::GET : RequestBody = QueryString; break;
+                case HTTP::RequestMethod::GET :  RequestBody = QueryString; break;
                 case HTTP::RequestMethod::POST : QueryString = RequestBody; break;
-                default : QueryString = RequestBody; break;
+                default :                        QueryString = RequestBody; break;
             }
 
             switch( ContentType )
             {
                 case HTTP::ContentType::Application::Json :
                 {
-                    QueryJson = Json::parse( RequestBody, nullptr, false );
-                    if( QueryJson.is_discarded() )  // parse error
+                    QueryJson = Json::parse( RequestBody, nullptr, false );  // disable exception
+                    if( QueryJson.is_discarded() )                           // parse error
                     {
                         // early response with error message
                         // caller does not see this iteration
@@ -430,10 +408,7 @@ inline namespace EasyFCGI
                             auto ContentType = Header | After( "\r\n" ) | After( "Content-Type:" ) | TrimSpace;
 
                             if( Body.ends_with( "\r\n--" ) ) Body.remove_suffix( 4 );
-                            if( ContentType.empty() )
-                            {
-                                QueryJson[Name] = Body;
-                            }
+                            if( ContentType.empty() ) { QueryJson[Name] = Body; }
                             else
                             {
                                 // char TempPath[]{ "/dev/shm/XXXXXX" };
@@ -445,7 +420,7 @@ inline namespace EasyFCGI
                                     QueryJson[Name] = "Upload Failure, Unable to open : {}"_FMT( TempPath );
                                     continue;
                                 }
-                                if constexpr( true )  // using legacy API
+                                if constexpr( true )                                  // using legacy API
                                 {
                                     (void)! ::write( FD, Body.data(), Body.size() );  // silent unused result warning
                                     ::close( FD );
