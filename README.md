@@ -1,6 +1,6 @@
 # To Clone
 ```
-git -c core.sshCommand="ssh -i ~/.ssh/GITHUB_MY_SSH_KEY -o IdentitiesOnly=yes" clone git@github.com:samyankc/MyCppInclude.git
+git -c core.sshCommand="ssh -i ~/.ssh/GITHUB_MY_SSH_KEY" clone git@github.com:samyankc/MyCppInclude.git <folder_name>
 ```
 
 # EasyWinUI
