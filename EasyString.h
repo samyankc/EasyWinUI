@@ -49,9 +49,9 @@ namespace
 
         constexpr operator const char*() const
         {
-            return std::visit( Visitor{ []( const char* Ptr ) { return Ptr; },
-                                        []( const std::unique_ptr<const char[]>& Rest ) { return Rest.get(); },
-                                        []( auto&& ) { return ""; } },
+            return std::visit( Visitor{ []( const char* Ptr ) { return Ptr; },                                   //
+                                        []( const std::unique_ptr<const char[]>& Rest ) { return Rest.get(); },  //
+                                        []( auto&& ) { return ""; } },                                           //
                                *this );
         }
     };
@@ -129,8 +129,10 @@ namespace EasyString
 
     struct StrViewPair
     {
-        constexpr StrViewPair( StrViewConvertible auto LeftSource, StrViewConvertible auto RightSource ) noexcept
-            : Left{ LeftSource }, Right{ RightSource }
+        constexpr StrViewPair( StrViewConvertible auto LeftSource,  //
+                               StrViewConvertible auto RightSource ) noexcept
+            : Left{ LeftSource },
+              Right{ RightSource }
         {}
 
       protected:
@@ -158,7 +160,7 @@ namespace EasyString
           protected:
             constexpr auto Search_impl( StrView Input ) const
             {
-                if consteval
+                if consteval  //
                 {
                     return std::search( Input.begin(), Input.end(), Text.begin(), Text.end() );
                 }
@@ -194,7 +196,7 @@ namespace EasyString
                     else
                         Input.remove_prefix( Input.length() );
 
-                    if( auto pos = Input.find_last_not_of( Text ); pos != Input.npos )
+                    if( auto pos = Input.find_last_not_of( Text ); pos != Input.npos )  //
                         Input.remove_suffix( Input.length() - pos - 1 );
                 }
                 return Input;
@@ -207,12 +209,12 @@ namespace EasyString
 
     constexpr auto TrimSpace( StrView Input ) -> StrView
     {
-        constexpr auto SpaceChar = []( const char c ) {
+        constexpr auto SpaceChar = []( const char c ) {  //
             return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
         };
-        return std::all_of( Input.begin(), Input.end(), SpaceChar )
+        return std::all_of( Input.begin(), Input.end(), SpaceChar )  //
                    ? StrView{ Input.end(), 0 }
-                   : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),
+                   : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),  //
                               std::find_if_not( Input.rbegin(), Input.rend(), SpaceChar ).base() };
     }
 
@@ -302,7 +304,6 @@ namespace EasyString
                            + std::count( Text.begin(), Text.end(), Delimiter );
                 }
                 constexpr auto front() const { return *begin(); }
-                constexpr auto front() const { return *begin(); }
             };
 
             constexpr auto By( const char Delimiter ) const { return InternalRange{ Text, Delimiter }; }
@@ -323,10 +324,7 @@ namespace EasyString
             {
                 DelimiterType Delimiter;
 
-                constexpr auto operator*() const
-                {
-                    return StrView{ Text.begin(), Search( Delimiter ).In( Text ).begin() };
-                }
+                constexpr auto operator*() const { return StrView{ Text.begin(), Search( Delimiter ).In( Text ).begin() }; }
 
                 constexpr auto operator!=( InternalItorSentinel ) const { return ! Text.empty(); }
                 constexpr auto& operator++()
@@ -384,8 +382,8 @@ namespace EasyString
             if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result, BASE ) ) )  //
                 return Result;
         }
-        else
-        {  // floating point
+        else  // floating point
+        {
             if( Successful( std::from_chars( Source.data(), Source.data() + Source.size(), Result ) ) )  //
                 return Result;
         }
@@ -440,10 +438,7 @@ namespace EasyString
             {
                 StrView BaseRange, LeftDelimiter, RightDelimiter;
 
-                constexpr auto begin() const
-                {
-                    return InternalItor{ BaseRange | After( LeftDelimiter ), LeftDelimiter, RightDelimiter };
-                }
+                constexpr auto begin() const { return InternalItor{ BaseRange | After( LeftDelimiter ), LeftDelimiter, RightDelimiter }; }
                 constexpr auto end() const { return InternalItorSentinel{}; }
             };
 
@@ -488,10 +483,7 @@ namespace EasyString
             }
         };
 
-        friend auto operator|( auto SourceRange, const DropIf& Adaptor )
-        {
-            return InternalRange{ SourceRange, Adaptor.DropCondition };
-        }
+        friend auto operator|( auto SourceRange, const DropIf& Adaptor ) { return InternalRange{ SourceRange, Adaptor.DropCondition }; }
     };
 
     struct Take
@@ -521,10 +513,7 @@ namespace EasyString
             }
         };
 
-        friend auto operator|( auto SourceRange, const Take& Adaptor )
-        {
-            return InternalRange{ SourceRange, Adaptor.N };
-        }
+        friend auto operator|( auto SourceRange, const Take& Adaptor ) { return InternalRange{ SourceRange, Adaptor.N }; }
     };
 
     struct Skip
@@ -546,10 +535,7 @@ namespace EasyString
             auto end() { return std::end( BaseRange ); }
         };
 
-        friend auto operator|( auto SourceRange, const Skip& Adaptor )
-        {
-            return InternalRange{ SourceRange, Adaptor.N };
-        }
+        friend auto operator|( auto SourceRange, const Skip& Adaptor ) { return InternalRange{ SourceRange, Adaptor.N }; }
     };
 
     template<typename FirstRange, typename SecondRange>
@@ -579,10 +565,7 @@ namespace EasyString
         struct Sentinel
         {};
 
-        friend auto operator!=( const Zip& Iter, const Sentinel& )
-        {
-            return Iter.FirstBegin != Iter.FirstEnd && Iter.SecondBegin != Iter.SecondEnd;
-        }
+        friend auto operator!=( const Zip& Iter, const Sentinel& ) { return Iter.FirstBegin != Iter.FirstEnd && Iter.SecondBegin != Iter.SecondEnd; }
         friend auto operator!=( const Sentinel& S, const Zip& Iter ) { return Iter != S; }
 
         auto& operator++()
@@ -602,17 +585,14 @@ namespace EasyString
     {
         int N;
 
-        friend auto operator|( auto SourceRange, const SliceAt& Adaptor )
-        {
-            return std::tuple{ SourceRange | Take( Adaptor.N ), SourceRange | Skip( Adaptor.N ) };
-        }
+        friend auto operator|( auto SourceRange, const SliceAt& Adaptor ) { return std::tuple{ SourceRange | Take( Adaptor.N ), SourceRange | Skip( Adaptor.N ) }; }
 
         friend constexpr auto operator|( std::string_view SourceRange, const SliceAt& Adaptor )
         {
             auto Begin = SourceRange.begin();
             auto End = SourceRange.end();
-            if( std::size( SourceRange ) >= Adaptor.N )
-                return std::array{ std::string_view{ Begin, Begin + 2 }, std::string_view{ Begin + 2, End } };
+            if( std::distance( Begin, End ) >= Adaptor.N )
+                return std::array{ std::string_view{ Begin, Begin + Adaptor.N }, std::string_view{ Begin + Adaptor.N, End } };
             else
                 return std::array{ SourceRange, std::string_view{ End, End } };
         }
