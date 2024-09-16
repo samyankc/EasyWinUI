@@ -16,7 +16,6 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <errno.h>
 #include <csignal>
 #include "EasyString.h"
 // #include <chrono>
@@ -34,8 +33,190 @@ auto ErrorGuard_impl( std::integral auto ErrorCode, std::string_view OperationTi
     std::exit( ErrorCode );
 }
 
+namespace HTTP
+{
+    using namespace EasyString;
+    struct RequestMethod
+    {
+        enum class ValueOption { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
+        ValueOption Verb;
+
+        using enum ValueOption;
+
+        static constexpr auto FromStringView( std::string_view VerbName )
+        {
+            if( VerbName == "GET" ) return GET;
+            if( VerbName == "PUT" ) return PUT;
+            if( VerbName == "POST" ) return POST;
+            if( VerbName == "HEAD" ) return HEAD;
+            if( VerbName == "PATCH" ) return PATCH;
+            if( VerbName == "TRACE" ) return TRACE;
+            if( VerbName == "DELETE" ) return DELETE;
+            if( VerbName == "OPTIONS" ) return OPTIONS;
+            if( VerbName == "CONNECT" ) return CONNECT;
+            return INVALID;
+        }
+
+#define CASE_RETURN( N ) \
+    case N : return #N
+        static constexpr auto ToStringView( ValueOption Verb ) -> std::string_view
+        {
+            switch( Verb )
+            {
+                CASE_RETURN( GET );
+                CASE_RETURN( PUT );
+                CASE_RETURN( POST );
+                CASE_RETURN( HEAD );
+                CASE_RETURN( PATCH );
+                CASE_RETURN( TRACE );
+                CASE_RETURN( DELETE );
+                CASE_RETURN( CONNECT );
+                CASE_RETURN( OPTIONS );
+            deafult:
+                CASE_RETURN( INVALID );
+            }
+        }
+#undef CASE_RETURN
+
+        constexpr RequestMethod() = default;
+        constexpr RequestMethod( const RequestMethod& ) = default;
+        constexpr RequestMethod( ValueOption OtherVerb ) : Verb{ OtherVerb } {}
+        constexpr RequestMethod( std::string_view VerbName ) : Verb{ FromStringView( VerbName ) } {}
+
+        constexpr operator std::string_view() const { return ToStringView( Verb ); }
+        constexpr auto EnumLiteral() const { return ToStringView( Verb ); }
+
+        constexpr operator ValueOption() const { return Verb; }
+    };
+
+    enum class StatusCode : int {
+        OK = 200,
+        Created = 201,
+        Accepted = 202,
+        NoContent = 204,
+        BadRequest = 400,
+        Unauthorized = 401,
+        Forbidden = 403,
+        NotFound = 404,
+        MethodNotAllowed = 405,
+        UnsupportedMediaType = 415,
+        UnprocessableEntity = 422,
+        InternalServerError = 500,
+        NotImplemented = 501,
+        ServiceUnavailable = 503,
+    };
+
+    struct ContentType
+    {
+        enum class ValueOption {
+            TEXT_PLAIN = 0,
+            TEXT_HTML,
+            TEXT_XML,
+            TEXT_CSV,
+            TEXT_CSS,
+            APPLICATION_JSON,
+            APPLICATION_X_WWW_FORM_URLENCODED,
+            APPLICATION_OCTET_STREAM,
+            MULTIPART_FORM_DATA,
+            MULTIPART_BYTERANGES,
+            UNKNOWN_MIME_TYPE,
+        };
+        ValueOption Type;
+
+        // using enum ValueOption;
+
+        static constexpr auto FromStringView( std::string_view TypeName )
+        {
+            using enum ValueOption;
+            if( TypeName == "text/plain" ) return TEXT_PLAIN;
+            if( TypeName == "text/html" ) return TEXT_HTML;
+            if( TypeName == "text/xml" ) return TEXT_XML;
+            if( TypeName == "text/csv" ) return TEXT_CSV;
+            if( TypeName == "text/css" ) return TEXT_CSS;
+            if( TypeName == "application/json" ) return APPLICATION_JSON;
+            if( TypeName == "application/x-www-form-urlencoded" ) return APPLICATION_X_WWW_FORM_URLENCODED;
+            if( TypeName == "application/octet-stream" ) return APPLICATION_OCTET_STREAM;
+            if( TypeName == "multipart/form-data" ) return MULTIPART_FORM_DATA;
+            if( TypeName == "multipart/byteranges" ) return MULTIPART_BYTERANGES;
+            return UNKNOWN_MIME_TYPE;
+        }
+
+        static constexpr auto ToStringView( ValueOption Type ) -> std::string_view
+        {
+            switch( Type )
+            {
+                using enum ValueOption;
+                case TEXT_PLAIN :                        return "text/plain";
+                case TEXT_HTML :                         return "text/html";
+                case TEXT_XML :                          return "text/xml";
+                case TEXT_CSV :                          return "text/csv";
+                case TEXT_CSS :                          return "text/css";
+                case APPLICATION_JSON :                  return "application/json";
+                case APPLICATION_X_WWW_FORM_URLENCODED : return "application/x-www-form-urlencoded";
+                case APPLICATION_OCTET_STREAM :          return "application/octet-stream";
+                case MULTIPART_FORM_DATA :               return "multipart/form-data";
+                case MULTIPART_BYTERANGES :              return "multipart/byteranges";
+                // default :
+                case UNKNOWN_MIME_TYPE :                 return "";
+            }
+        }
+
+        struct Text;
+        struct Application;
+        struct MultiPart;
+
+        constexpr ContentType() = default;
+        constexpr ContentType( const ContentType& ) = default;
+        constexpr ContentType( ValueOption Other ) : Type{ Other } {}
+        constexpr ContentType( std::string_view TypeName ) : Type{ FromStringView( Split( TypeName ).By( ";" ).front() | TrimSpace ) }
+        {
+            // if( Type == UNKNOWN_MIME_TYPE ) Type = TEXT_PLAIN;
+        }
+
+        constexpr operator std::string_view() const { return ToStringView( Type ); }
+        // constexpr auto EnumLiteral() const { return ToStringView( Type ); }
+
+        constexpr operator ValueOption() const { return Type; }
+    };
+
+    struct ContentType::Text
+    {
+        using enum ValueOption;
+        constexpr static ContentType Plain = TEXT_PLAIN;
+        constexpr static ContentType HTML = TEXT_HTML;
+        constexpr static ContentType XML = TEXT_XML;
+        constexpr static ContentType CSV = TEXT_CSV;
+        constexpr static ContentType CSS = TEXT_CSS;
+    };
+
+    struct ContentType::Application
+    {
+        using enum ValueOption;
+        constexpr static ContentType Json = APPLICATION_JSON;
+        constexpr static ContentType FormURLEncoded = APPLICATION_X_WWW_FORM_URLENCODED;
+        constexpr static ContentType OctetStream = APPLICATION_OCTET_STREAM;
+    };
+
+    struct ContentType::MultiPart
+    {
+        using enum ValueOption;
+        constexpr static ContentType FormData = MULTIPART_FORM_DATA;
+        constexpr static ContentType ByteRanges = MULTIPART_BYTERANGES;
+    };
+
+}  // namespace HTTP
+
 namespace EasyFCGI
 {
+
+    inline namespace Concept
+    {
+        template<typename T>
+        concept DumpingString = requires( T&& t ) {
+            { t.dump() } -> std::same_as<std::string>;
+        };
+    }
+
     namespace std_fs = std::filesystem;
     struct Config
     {
@@ -70,10 +251,6 @@ namespace EasyFCGI
                                                    .replace_extension( Config::SocketExtensionSuffix );
 
         inline static auto OptionSocketPath = [] -> std::optional<std_fs::path> {
-            // for( int i = 1; i < CommandLine.size() - 1; ++i )
-            //     if( auto LaunchOption = std::string_view{ CommandLine[i] };  //
-            //         LaunchOption == "-s" || LaunchOption == "--socket" )
-            //         return std_fs::canonical( CommandLine[i + 1] );
             for( auto&& [Option, OptionArg] : CommandLine | std::views::adjacent<2> )
                 if( Option == std::string_view{ "-s" } )  //
                     return OptionArg;
@@ -137,7 +314,39 @@ namespace EasyFCGI
     };
 
     struct Response
-    {};
+    {
+        HTTP::StatusCode StatusCode{ HTTP::StatusCode::OK };
+        HTTP::ContentType ContentType{ HTTP::ContentType::Text::Plain };
+        std::vector<std::string> Body;
+
+        auto& Set( HTTP::StatusCode NewValue ) { return StatusCode = NewValue; }
+        auto& Set( HTTP::ContentType NewValue ) { return ContentType = NewValue; }
+
+        auto Reset()
+        {
+            Set( HTTP::StatusCode::OK );
+            Set( HTTP::ContentType::Text::Plain );
+            Body.clear();
+        }
+
+        template<typename T> decltype( auto ) Append( T&& NewContent ) noexcept
+        {
+            if constexpr( DumpingString<T> ) { Body.push_back( NewContent.dump() ); }
+            else { Body.push_back( static_cast<std::string>( std::forward<T>( NewContent ) ) ); }
+            return *this;
+        }
+
+        template<typename T> decltype( auto ) operator+=( T&& NewContent ) noexcept { return Append( std::forward<T>( NewContent ) ); }
+
+        template<typename T> requires( ! std::same_as<std::remove_cvref_t<T>, Response> )
+        decltype( auto ) operator=( T&& NewContent ) noexcept
+        {
+            Body.clear();
+            return Append( std::forward<T>( NewContent ) );
+        }
+
+        template<std::default_initializable T> operator T() const { return {}; }
+    };
 
     struct Request
     {
@@ -158,6 +367,7 @@ namespace EasyFCGI
         };
 
         std::unique_ptr<FCGX_Request, FCGX_Request_Deleter> FCGX_Request_Ptr;
+        Response Response;
 
         Request() = default;
         // Request( const Request& ) = delete;
@@ -185,7 +395,10 @@ namespace EasyFCGI
 
         auto empty() const { return FCGX_Request_Ptr == nullptr; }
 
-        // virtual ~Request() { FCGX_Finish_r( FCGX_Request_Ptr.get() ); }
+        // virtual ~Request()
+        // {
+        //     if( FCGX_Request_Ptr == nullptr ) return;
+        // }
     };
 
     struct Server
