@@ -6,6 +6,7 @@
 #include <fcgiapp.h>
 #include <fcgios.h>
 #include <concepts>
+#include <utility>
 #include <vector>
 #include <atomic>
 #include <cstdlib>
@@ -123,8 +124,6 @@ namespace HTTP
         };
         ValueOption Type;
 
-        // using enum ValueOption;
-
         static constexpr auto FromStringView( std::string_view TypeName )
         {
             using enum ValueOption;
@@ -159,6 +158,7 @@ namespace HTTP
                 // default :
                 case UNKNOWN_MIME_TYPE :                 return "";
             }
+            return "";
         }
 
         struct Text;
@@ -174,34 +174,31 @@ namespace HTTP
         }
 
         constexpr operator std::string_view() const { return ToStringView( Type ); }
-        // constexpr auto EnumLiteral() const { return ToStringView( Type ); }
+        constexpr auto EnumLiteral() const { return ToStringView( Type ); }
 
         constexpr operator ValueOption() const { return Type; }
     };
 
     struct ContentType::Text
     {
-        using enum ValueOption;
-        constexpr static ContentType Plain = TEXT_PLAIN;
-        constexpr static ContentType HTML = TEXT_HTML;
-        constexpr static ContentType XML = TEXT_XML;
-        constexpr static ContentType CSV = TEXT_CSV;
-        constexpr static ContentType CSS = TEXT_CSS;
+        constexpr static ContentType Plain = ValueOption::TEXT_PLAIN;
+        constexpr static ContentType HTML = ValueOption::TEXT_HTML;
+        constexpr static ContentType XML = ValueOption::TEXT_XML;
+        constexpr static ContentType CSV = ValueOption::TEXT_CSV;
+        constexpr static ContentType CSS = ValueOption::TEXT_CSS;
     };
 
     struct ContentType::Application
     {
-        using enum ValueOption;
-        constexpr static ContentType Json = APPLICATION_JSON;
-        constexpr static ContentType FormURLEncoded = APPLICATION_X_WWW_FORM_URLENCODED;
-        constexpr static ContentType OctetStream = APPLICATION_OCTET_STREAM;
+        constexpr static ContentType Json = ValueOption::APPLICATION_JSON;
+        constexpr static ContentType FormURLEncoded = ValueOption::APPLICATION_X_WWW_FORM_URLENCODED;
+        constexpr static ContentType OctetStream = ValueOption::APPLICATION_OCTET_STREAM;
     };
 
     struct ContentType::MultiPart
     {
-        using enum ValueOption;
-        constexpr static ContentType FormData = MULTIPART_FORM_DATA;
-        constexpr static ContentType ByteRanges = MULTIPART_BYTERANGES;
+        constexpr static ContentType FormData = ValueOption::MULTIPART_FORM_DATA;
+        constexpr static ContentType ByteRanges = ValueOption::MULTIPART_BYTERANGES;
     };
 
 }  // namespace HTTP
@@ -351,10 +348,10 @@ namespace EasyFCGI
     struct Request
     {
         // gcc-14's bug to issue internal linkage warning
-        using FCGX_Request_Deleter_BUGGED = decltype( []( FCGX_Request* P ) {
-            FCGX_Finish_r( P );
-            delete P;
-        } );
+        // using FCGX_Request_Deleter_BUGGED = decltype( []( FCGX_Request* P ) {
+        //     FCGX_Finish_r( P );
+        //     delete P;
+        // } );
 
         // work around
         struct FCGX_Request_Deleter
@@ -367,11 +364,11 @@ namespace EasyFCGI
         };
 
         std::unique_ptr<FCGX_Request, FCGX_Request_Deleter> FCGX_Request_Ptr;
-        Response Response;
+        struct Response Response;  // elaborated-type-specifier, silencing -Wchanges-meaning
 
         Request() = default;
         // Request( const Request& ) = delete;
-        // Request( Request&& Other ) : FCGX_Request_Ptr{ std::move( Other.FCGX_Request_Ptr ) } {};
+        Request( Request&& Other ) = default;
 
         Request( FileDescriptor SocketFD ) : FCGX_Request_Ptr{ std::make_unique_for_overwrite<FCGX_Request>().release() }
         {
@@ -386,6 +383,13 @@ namespace EasyFCGI
 
         static auto AcceptFrom( FileDescriptor SocketFD ) { return Request{ SocketFD }; }
 
+        Request& operator=( Request&& Other ) = default;
+        // {
+        //     FCGX_Request_Ptr = std::move( Other.FCGX_Request_Ptr );
+        //     Response = std::move( Other.Response );
+        //     return *this;
+        // }
+
         auto GetParam( std::string_view ParamName ) const
         {
             const char* Result = FCGX_GetParam( std::data( ParamName ), FCGX_Request_Ptr->envp );
@@ -395,10 +399,34 @@ namespace EasyFCGI
 
         auto empty() const { return FCGX_Request_Ptr == nullptr; }
 
-        // virtual ~Request()
-        // {
-        //     if( FCGX_Request_Ptr == nullptr ) return;
-        // }
+        auto FlushResponse() -> void
+        {
+            auto out = FCGX_Request_Ptr->out;
+            if( Response.StatusCode == HTTP::StatusCode::NoContent ) { FCGX_PutS( "Status: 204\r\n", out ); }
+            else
+            {
+                FCGX_PutS( "Status: {}\r\n"_FMT( std::to_underlying( Response.StatusCode ) ).c_str(), out );
+                FCGX_PutS( "Content-Type: {}; charset=UTF-8\r\n"_FMT( Response.ContentType.EnumLiteral() ).c_str(), out );
+                FCGX_PutChar( '\r', out );
+                FCGX_PutChar( '\n', out );
+                for( auto&& Buffer : Response.Body ) FCGX_PutS( Buffer.c_str(), out );
+            }
+            // Response.Reset();  // seems not necessary anymore
+        }
+
+        virtual ~Request()
+        {
+            if( FCGX_Request_Ptr == nullptr ) return;
+            FlushResponse();
+            // namespace fs = std::filesystem;
+            // for( auto&& [Key, Entry] : Query.Json.items() )
+            //     if( Entry.contains( QueryKey::FileUpload::TemporaryPath ) )
+            //         if( auto PathString = Entry[QueryKey::FileUpload::TemporaryPath].get<std::string>();  //
+            //             PathString.contains( TempPathTemplatePrefix ) )
+            //             if( auto Path = fs::path( PathString );                                           //
+            //                 fs::exists( Path ) )
+            //                 fs::remove( Path );
+        }
     };
 
     struct Server
