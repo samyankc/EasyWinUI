@@ -39,10 +39,10 @@ namespace HTTP
     using namespace EasyString;
     struct RequestMethod
     {
-        enum class ValueOption { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
-        ValueOption Verb;
+        enum class EnumValue { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
+        EnumValue Verb;
 
-        using enum ValueOption;
+        using enum EnumValue;
 
         static constexpr auto FromStringView( std::string_view VerbName )
         {
@@ -60,7 +60,7 @@ namespace HTTP
 
 #define CASE_RETURN( N ) \
     case N : return #N
-        static constexpr auto ToStringView( ValueOption Verb ) -> std::string_view
+        static constexpr auto ToStringView( EnumValue Verb ) -> std::string_view
         {
             switch( Verb )
             {
@@ -81,13 +81,13 @@ namespace HTTP
 
         constexpr RequestMethod() = default;
         constexpr RequestMethod( const RequestMethod& ) = default;
-        constexpr RequestMethod( ValueOption OtherVerb ) : Verb{ OtherVerb } {}
+        constexpr RequestMethod( EnumValue OtherVerb ) : Verb{ OtherVerb } {}
         constexpr RequestMethod( std::string_view VerbName ) : Verb{ FromStringView( VerbName ) } {}
 
         constexpr operator std::string_view() const { return ToStringView( Verb ); }
         constexpr auto EnumLiteral() const { return ToStringView( Verb ); }
 
-        constexpr operator ValueOption() const { return Verb; }
+        constexpr operator EnumValue() const { return Verb; }
     };
 
     enum class StatusCode : int {
@@ -109,7 +109,7 @@ namespace HTTP
 
     struct ContentType
     {
-        enum class ValueOption {
+        enum class EnumValue {
             TEXT_PLAIN = 0,
             TEXT_HTML,
             TEXT_XML,
@@ -122,11 +122,11 @@ namespace HTTP
             MULTIPART_BYTERANGES,
             UNKNOWN_MIME_TYPE,
         };
-        ValueOption Type;
+        EnumValue Type;
 
         static constexpr auto FromStringView( std::string_view TypeName )
         {
-            using enum ValueOption;
+            using enum EnumValue;
             if( TypeName == "text/plain" ) return TEXT_PLAIN;
             if( TypeName == "text/html" ) return TEXT_HTML;
             if( TypeName == "text/xml" ) return TEXT_XML;
@@ -140,11 +140,11 @@ namespace HTTP
             return UNKNOWN_MIME_TYPE;
         }
 
-        static constexpr auto ToStringView( ValueOption Type ) -> std::string_view
+        static constexpr auto ToStringView( EnumValue Type ) -> std::string_view
         {
             switch( Type )
             {
-                using enum ValueOption;
+                using enum EnumValue;
                 case TEXT_PLAIN :                        return "text/plain";
                 case TEXT_HTML :                         return "text/html";
                 case TEXT_XML :                          return "text/xml";
@@ -167,7 +167,7 @@ namespace HTTP
 
         constexpr ContentType() = default;
         constexpr ContentType( const ContentType& ) = default;
-        constexpr ContentType( ValueOption Other ) : Type{ Other } {}
+        constexpr ContentType( EnumValue Other ) : Type{ Other } {}
         constexpr ContentType( std::string_view TypeName ) : Type{ FromStringView( Split( TypeName ).By( ";" ).front() | TrimSpace ) }
         {
             // if( Type == UNKNOWN_MIME_TYPE ) Type = TEXT_PLAIN;
@@ -176,29 +176,29 @@ namespace HTTP
         constexpr operator std::string_view() const { return ToStringView( Type ); }
         constexpr auto EnumLiteral() const { return ToStringView( Type ); }
 
-        constexpr operator ValueOption() const { return Type; }
+        constexpr operator EnumValue() const { return Type; }
     };
 
     struct ContentType::Text
     {
-        constexpr static ContentType Plain = ValueOption::TEXT_PLAIN;
-        constexpr static ContentType HTML = ValueOption::TEXT_HTML;
-        constexpr static ContentType XML = ValueOption::TEXT_XML;
-        constexpr static ContentType CSV = ValueOption::TEXT_CSV;
-        constexpr static ContentType CSS = ValueOption::TEXT_CSS;
+        constexpr static ContentType Plain = EnumValue::TEXT_PLAIN;
+        constexpr static ContentType HTML = EnumValue::TEXT_HTML;
+        constexpr static ContentType XML = EnumValue::TEXT_XML;
+        constexpr static ContentType CSV = EnumValue::TEXT_CSV;
+        constexpr static ContentType CSS = EnumValue::TEXT_CSS;
     };
 
     struct ContentType::Application
     {
-        constexpr static ContentType Json = ValueOption::APPLICATION_JSON;
-        constexpr static ContentType FormURLEncoded = ValueOption::APPLICATION_X_WWW_FORM_URLENCODED;
-        constexpr static ContentType OctetStream = ValueOption::APPLICATION_OCTET_STREAM;
+        constexpr static ContentType Json = EnumValue::APPLICATION_JSON;
+        constexpr static ContentType FormURLEncoded = EnumValue::APPLICATION_X_WWW_FORM_URLENCODED;
+        constexpr static ContentType OctetStream = EnumValue::APPLICATION_OCTET_STREAM;
     };
 
     struct ContentType::MultiPart
     {
-        constexpr static ContentType FormData = ValueOption::MULTIPART_FORM_DATA;
-        constexpr static ContentType ByteRanges = ValueOption::MULTIPART_BYTERANGES;
+        constexpr static ContentType FormData = EnumValue::MULTIPART_FORM_DATA;
+        constexpr static ContentType ByteRanges = EnumValue::MULTIPART_BYTERANGES;
     };
 
 }  // namespace HTTP
@@ -384,11 +384,6 @@ namespace EasyFCGI
         static auto AcceptFrom( FileDescriptor SocketFD ) { return Request{ SocketFD }; }
 
         Request& operator=( Request&& Other ) = default;
-        // {
-        //     FCGX_Request_Ptr = std::move( Other.FCGX_Request_Ptr );
-        //     Response = std::move( Other.Response );
-        //     return *this;
-        // }
 
         auto GetParam( std::string_view ParamName ) const
         {
@@ -401,15 +396,17 @@ namespace EasyFCGI
 
         auto FlushResponse() -> void
         {
-            auto out = FCGX_Request_Ptr->out;
-            if( Response.StatusCode == HTTP::StatusCode::NoContent ) { FCGX_PutS( "Status: 204\r\n", out ); }
+            auto SendLine = [out = FCGX_Request_Ptr->out]( std::string_view Content = {} ) {
+                if( ! Content.empty() ) FCGX_PutStr( Content.data(), Content.length(), out );
+                FCGX_PutStr( "\r\n", 2, out );
+            };
+            if( Response.StatusCode == HTTP::StatusCode::NoContent ) { SendLine( "Status: 204\r\n" ); }
             else
             {
-                FCGX_PutS( "Status: {}\r\n"_FMT( std::to_underlying( Response.StatusCode ) ).c_str(), out );
-                FCGX_PutS( "Content-Type: {}; charset=UTF-8\r\n"_FMT( Response.ContentType.EnumLiteral() ).c_str(), out );
-                FCGX_PutChar( '\r', out );
-                FCGX_PutChar( '\n', out );
-                for( auto&& Buffer : Response.Body ) FCGX_PutS( Buffer.c_str(), out );
+                SendLine( "Status: {}"_FMT( std::to_underlying( Response.StatusCode ) ) );
+                SendLine( "Content-Type: {}; charset=UTF-8"_FMT( Response.ContentType.EnumLiteral() ) );
+                SendLine();
+                for( auto&& Buffer : Response.Body ) SendLine( Buffer.c_str() );
             }
             // Response.Reset();  // seems not necessary anymore
         }
@@ -494,12 +491,6 @@ namespace EasyFCGI
         };
 
         auto RequestQueue() const { return RequestContainer{ .SocketFD = SocketFD }; }
-
-        // virtual ~Server()
-        // {
-        //     shutdown( SocketFD, SHUT_RDWR );
-        //     ::close( SocketFD );
-        // }
     };
 
 }  // namespace EasyFCGI
