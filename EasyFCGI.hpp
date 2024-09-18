@@ -1,13 +1,13 @@
 #ifndef _EASY_FCGI_HPP
 #define _EASY_FCGI_HPP
-#include <iterator>
 #define NO_FCGI_DEFINES
-#include <memory>
 #include <fcgiapp.h>
-#include <fcgios.h>
+#include <memory>
 #include <concepts>
 #include <utility>
 #include <vector>
+#include <ranges>
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <source_location>
@@ -18,7 +18,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <csignal>
-#include "EasyString.h"
+// #include "EasyString.h"
 // #include <chrono>
 using namespace std::chrono_literals;
 
@@ -34,18 +34,58 @@ auto ErrorGuard_impl( std::integral auto ErrorCode, std::string_view OperationTi
     std::exit( ErrorCode );
 }
 
+namespace ParseUtil
+{
+    using namespace std::string_literals;
+    using namespace std::string_view_literals;
+
+    using StrView = std::string_view;
+
+    template<std::size_t N, typename CharT = char> struct FixedString
+    {
+        CharT Data[N];
+        constexpr FixedString( const CharT ( &Src )[N] ) noexcept { std::copy_n( Src, N, Data ); }
+        constexpr operator std::basic_string_view<CharT>() const noexcept { return { Data, N }; }
+    };
+
+    template<FixedString FSTR> constexpr auto operator""_FMT() noexcept
+    {
+        return []( auto&&... args ) { return std::format( FSTR, std::forward<decltype( args )>( args )... ); };
+    }
+    constexpr auto TrimSpaceRA = std::views::drop_while( ::isspace )                                     //
+                                 | std::views::reverse                                                   //
+                                 | std::views::drop_while( ::isspace )                                   //
+                                 | std::views::reverse                                                   //
+                                 | std::views::transform( []( auto&& E ) { return StrView{ std::addressof(E), 1 }; } )  //
+        ;
+
+    constexpr auto TrimSpace = []( StrView Input )                   //-> StrView
+    {
+        auto R = std::ranges::fold_left_first( Input | TrimSpaceRA,  //
+                                               []( StrView Acc, StrView Cur ) { return StrView{ Acc.begin(), Cur.end() }; } );
+
+        //| std::ranges::fold_left_first( []( StrView Acc, StrView Cur ) { return StrView{ Acc.begin(), Cur.end() }; } );
+        return R.value_or("");
+        // return std::string_view{ R.begin(), R.end() };
+        // Input = { std::ranges::find_if_not( Input, ::isspace ), Input.end() };
+        // if( Input.empty() ) return Input;
+        // return { Input.begin(), std::ranges::find_last_if_not( Input, ::isspace ).begin() + 1 };
+    };
+};  // namespace ParseUtil
+
+using ParseUtil::operator""_FMT;
+
 namespace HTTP
 {
-    using namespace EasyString;
+    // using namespace EasyString;
     struct RequestMethod
     {
         enum class EnumValue { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
         EnumValue Verb;
 
-        using enum EnumValue;
-
         static constexpr auto FromStringView( std::string_view VerbName )
         {
+            using enum EnumValue;
             if( VerbName == "GET" ) return GET;
             if( VerbName == "PUT" ) return PUT;
             if( VerbName == "POST" ) return POST;
@@ -64,6 +104,8 @@ namespace HTTP
         {
             switch( Verb )
             {
+                using enum EnumValue;
+
                 CASE_RETURN( GET );
                 CASE_RETURN( PUT );
                 CASE_RETURN( POST );
@@ -156,7 +198,7 @@ namespace HTTP
                 case MULTIPART_FORM_DATA :               return "multipart/form-data";
                 case MULTIPART_BYTERANGES :              return "multipart/byteranges";
                 // default :
-                case UNKNOWN_MIME_TYPE :                 return "";
+                case UNKNOWN_MIME_TYPE :                 return ToStringView( TEXT_PLAIN );
             }
             return "";
         }
@@ -168,7 +210,14 @@ namespace HTTP
         constexpr ContentType() = default;
         constexpr ContentType( const ContentType& ) = default;
         constexpr ContentType( EnumValue Other ) : Type{ Other } {}
-        constexpr ContentType( std::string_view TypeName ) : Type{ FromStringView( Split( TypeName ).By( ";" ).front() | TrimSpace ) }
+        constexpr ContentType( std::string_view TypeName )  //
+            : Type{ FromStringView(                         //
+                  ( TypeName | std::views::split( ';' )     //
+                    | std::views::transform( []( auto&& SR ) { return std::string_view{ SR }; } ) )
+                      .front()
+
+                  //   Split( TypeName ).By( ";" ).front() | TrimSpace
+                  ) }
         {
             // if( Type == UNKNOWN_MIME_TYPE ) Type = TEXT_PLAIN;
         }
@@ -259,6 +308,11 @@ namespace EasyFCGI
     static auto TerminationHandler = []( int Signal ) {
         std::println( "\nReceiving Signal : {}", Signal );
         TerminationSignal = true;
+    };
+
+    extern "C"
+    {
+        void OS_LibShutdown();  // <fcgios.h>
     };
 
     static auto InitializationExecution = [] {
@@ -406,7 +460,7 @@ namespace EasyFCGI
                 SendLine( "Status: {}"_FMT( std::to_underlying( Response.StatusCode ) ) );
                 SendLine( "Content-Type: {}; charset=UTF-8"_FMT( Response.ContentType.EnumLiteral() ) );
                 SendLine();
-                for( auto&& Buffer : Response.Body ) SendLine( Buffer.c_str() );
+                std::ranges::for_each( Response.Body, SendLine );
             }
             // Response.Reset();  // seems not necessary anymore
         }
