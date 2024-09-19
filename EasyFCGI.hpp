@@ -1,5 +1,6 @@
 #ifndef _EASY_FCGI_HPP
 #define _EASY_FCGI_HPP
+#include <variant>
 #define NO_FCGI_DEFINES
 #include <fcgiapp.h>
 #include <memory>
@@ -52,25 +53,65 @@ namespace ParseUtil
     {
         return []( auto&&... args ) { return std::format( FSTR, std::forward<decltype( args )>( args )... ); };
     }
-    constexpr auto TrimSpaceRA = std::views::drop_while( ::isspace )                                     //
-                                 | std::views::reverse                                                   //
-                                 | std::views::drop_while( ::isspace )                                   //
-                                 | std::views::reverse                                                   //
-                                 | std::views::transform( []( auto&& E ) { return StrView{ std::addressof(E), 1 }; } )  //
-        ;
 
-    constexpr auto TrimSpace = []( StrView Input )                   //-> StrView
+    struct BoundaryRA : std::ranges::range_adaptor_closure<BoundaryRA>
     {
-        auto R = std::ranges::fold_left_first( Input | TrimSpaceRA,  //
-                                               []( StrView Acc, StrView Cur ) { return StrView{ Acc.begin(), Cur.end() }; } );
-
-        //| std::ranges::fold_left_first( []( StrView Acc, StrView Cur ) { return StrView{ Acc.begin(), Cur.end() }; } );
-        return R.value_or("");
-        // return std::string_view{ R.begin(), R.end() };
-        // Input = { std::ranges::find_if_not( Input, ::isspace ), Input.end() };
-        // if( Input.empty() ) return Input;
-        // return { Input.begin(), std::ranges::find_last_if_not( Input, ::isspace ).begin() + 1 };
+        constexpr auto static operator()( auto&& Range )
+        {
+            struct _
+            {
+                decltype( std::ranges::begin( Range ) ) Begin;
+                decltype( std::ranges::end( Range ) ) End;
+            };
+            return _{ std::ranges::begin( Range ), std::ranges::end( Range ) };
+        }
     };
+    constexpr auto Boundary = BoundaryRA{};
+
+    struct TrimSpaceRA : std::ranges::range_adaptor_closure<TrimSpaceRA>
+    {
+        constexpr static StrView operator()( StrView Input )
+        {
+            auto SpaceRemoved = Input                                  //
+                                | std::views::drop_while( ::isspace )  //
+                                | std::views::reverse                  //
+                                | std::views::drop_while( ::isspace )  //
+                                | std::views::reverse;
+            return { &*std::ranges::begin( SpaceRemoved ),             //
+                     &*std::ranges::rbegin( SpaceRemoved ) + 1 };
+        }
+    };
+    constexpr auto TrimSpace = TrimSpaceRA{};
+
+    struct StrViewPattern
+    {
+        constexpr StrViewPattern( StrView Pattern ) : Pattern{ Pattern }, CharPattern{} {}
+        constexpr StrViewPattern( char CharPattern ) : CharPattern{ CharPattern }, Pattern{ &this->CharPattern, 1 } {}
+
+      protected:
+        StrView Pattern;
+        char CharPattern;
+    };
+
+    struct Search : StrViewPattern, std::ranges::range_adaptor_closure<Search>
+    {
+        using StrViewPattern::StrViewPattern;
+        constexpr StrView operator()( StrView Input ) const { return StrView{ std::ranges::search( Input, Pattern ) }; }
+        constexpr StrView In( StrView Input ) const { return operator()( Input ); }
+    };
+
+    struct Before : StrViewPattern, std::ranges::range_adaptor_closure<Before>
+    {
+        using StrViewPattern::StrViewPattern;
+        constexpr StrView operator()( StrView Input ) const
+        {
+            auto [InputBegin, InputEnd] = Input | Boundary;
+            auto [MatchBegin, MatchEnd] = Input | Search( Pattern ) | Boundary;
+            if( MatchBegin == InputEnd ) return { InputEnd, InputEnd };
+            return { InputBegin, MatchBegin };
+        }
+    };
+
 };  // namespace ParseUtil
 
 using ParseUtil::operator""_FMT;
@@ -315,14 +356,14 @@ namespace EasyFCGI
         void OS_LibShutdown();  // <fcgios.h>
     };
 
-    static auto InitializationExecution = [] {
+    static auto ServerInitialization = [] {
         ErrorGuard( FCGX_Init() );
         std::atexit( OS_LibShutdown );
         std::atexit( [] { std::println( "Porgram exiting from standard exit pathway." ); } );
         std::signal( SIGINT, TerminationHandler );
         std::signal( SIGTERM, TerminationHandler );
         return 0;
-    }();
+    };
 
     struct FileDescriptor
     {
@@ -486,6 +527,8 @@ namespace EasyFCGI
 
         Server( FileDescriptor FD ) : SocketFD{ FD }
         {
+            ServerInitialization();
+
             std::println( "Server file descriptor : {}", static_cast<int>( SocketFD ) );
             std::println( "Unix Socket Path : {}", SocketFD.UnixSocketName().c_str() );
             std::println( "Ready to accept requests..." );
