@@ -225,6 +225,18 @@ namespace ParseUtil
         template<typename NumericType, int BASE = 10>  //
         constexpr auto ConvertTo = ConvertToRA<NumericType, BASE>{};
 
+        template<typename NumericType>  //
+        struct FallBack : RNG::range_adaptor_closure<FallBack<NumericType>>
+        {
+            NumericType N;
+            constexpr FallBack( NumericType N ) : N{ N } {}
+            template<typename OtherNumericType>  //
+            constexpr auto operator()( const std::optional<OtherNumericType>& Input ) const
+            {
+                return Input.value_or( N );
+            }
+        };
+
         struct RestoreSpaceCharRA : RNG::range_adaptor_closure<RestoreSpaceCharRA>
         {
             constexpr static auto operator()( const auto& Input )
@@ -275,7 +287,7 @@ namespace ParseUtil
     [[nodiscard]]
     static auto HexToChar( StrView HexString ) noexcept
     {
-        return std::bit_cast<char>( (HexString | ConvertTo<unsigned char, 16>).value_or( '?' ) );
+        return std::bit_cast<char>( HexString | ConvertTo<unsigned char, 16> | FallBack( '?' ) );
     }
 
     [[nodiscard]]
@@ -308,7 +320,7 @@ namespace HTTP
 
     struct RequestMethod
     {
-        enum class EnumValue { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
+        enum class EnumValue : unsigned short { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
         EnumValue Verb;
         using enum EnumValue;
 
@@ -498,6 +510,9 @@ namespace EasyFCGI
         constexpr static auto SocketDirectoryPrefix = StrView{ "/dev/shm/" };
         constexpr static auto SocketExtensionSuffix = StrView{ ".sock" };
 
+        // constexpr static auto TempPathTemplate = StrView{ "/dev/shm/XXXXXX" };
+        // constexpr static auto TempPathTemplatePrefix = TempPathTemplate | PU::Before( "XXXXXX" );
+
         constexpr static auto CommandLineBufferMax = 4096uz;
         inline static auto CommandLineBuffer = std::vector<char>{};
         inline static auto CommandLine = [] {
@@ -648,15 +663,44 @@ namespace EasyFCGI
         {
             StorageEngine Json;
             auto contains( StrView Key ) const { return Json.contains( Key ); }
-            auto operator[]( StrView Key ) const
+            auto operator[]( StrView Key, std::size_t Index = 0 ) const -> std::string
             {
-                if( Json.contains( Key ) )
+                if( ! Json.contains( Key ) ) return {};
+                const auto& Slot = Json[Key];
+                if( Slot.is_array() )
                 {
-                    auto& Slot = Json[Key];
-                    if( Slot.is_string() ) return Slot.template get<std::string>();
-                    else return Slot.dump();
+                    if( Index < Slot.size() ) return Slot[Index];
+                    else return {};
                 }
-                else return std::string{};
+                if( Slot.is_string() ) return Slot.template get<std::string>();
+                return Slot.dump();
+            }
+        };
+
+        struct Files
+        {
+            enum OverWriteOptions : unsigned char {
+                Abort = 0,
+                OverWrite = 0b1,
+                RenameOldFile = 0b10,
+                RenameNewFile = 0b100,
+            };
+            struct FileView
+            {
+                StrView FileName;
+                StrView ContentType;
+                StrView ContentBody;
+                auto SaveAs( const FS::path& Path, const OverWriteOptions = Abort ) const {
+
+                };
+            };
+            std::map<StrView, std::vector<FileView>> Storage;
+            auto operator[]( StrView Key, std::size_t Index = 0 ) const -> FileView
+            {
+                if( ! Storage.contains( Key ) ) return {};
+                const auto& Slot = Storage.at( Key );
+                if( Index < Slot.size() ) return Slot[Index];
+                return {};
             }
         };
 
@@ -664,6 +708,9 @@ namespace EasyFCGI
         HTTP::RequestMethod Method;
         HTTP::ContentType ContentType;
         QueryExecutor<Json> Query;
+        struct Files Files;
+        std::string RequestBody;
+
         // std::size_t ContentLength;
         // std::string_view ScriptName;
         // std::string_view RequestURI;
@@ -681,38 +728,71 @@ namespace EasyFCGI
 
         auto Parse()
         {
-            // Query.Json.clear();
+            using namespace ParseUtil;
+            Query.Json.clear();
+            Files.Storage.clear();
+            RequestBody.clear();
+
             Method = GetParam( "REQUEST_METHOD" );
             ContentType = GetParam( "CONTENT_TYPE" );
 
-            auto QueryAppend = [&Result = Query.Json]( std::string Key, std::string Value ) {
-                if( Result.contains( Key ) )
-                {
-                    auto& Slot = Result[Key];
-                    if( Slot.is_array() ) { Slot.push_back( std::move( Value ) ); }
-                    else
-                    {
-                        auto Temp = std::move( Slot );
-                        Result.erase( Key );
-                        auto& Array = Result[Key];
-                        Array.push_back( std::move( Temp ) );
-                        Array.push_back( std::move( Value ) );
-                    }
-                }
-                else { Result[Key] = std::move( Value ); }
+            RequestBody.resize_and_overwrite( GetParam( "CONTENT_LENGTH" ) | ConvertTo<int> | FallBack( 0 ),    //
+                                              [Stream = FCGX_Request_Ptr->in]( char* Buffer, std::size_t N ) {  //
+                                                  return FCGX_GetStr( Buffer, N, Stream );
+                                              } );
+
+            auto QueryAppend = [&Result = Query.Json]( std::string_view Key, auto&& Value ) {
+                if( Key.empty() ) return;
+                Result[Key].push_back( std::forward<decltype( Value )>( Value ) );
             };
 
-            switch( Method )
             {
-                case HTTP::RequestMethod::GET :
-                {
-                    for( auto Segment : StrView{ GetParam( "QUERY_STRING" ) } | PU::SplitBy( '&' ) )
-                        for( auto [EncodedKey, EncodedValue] : Segment | PU::SplitBy( '=' ) | VIEW::adjacent<2> )
-                            QueryAppend( PU::DecodeURLFragment( EncodedKey ), PU::DecodeURLFragment( EncodedValue ) );
-                }
-                break;
+                // read query string, then request body
+                // duplicated key-value will be overwritten
+                for( auto Segment : GetParam( "QUERY_STRING" ) | SplitBy( '&' ) )
+                    for( auto [EncodedKey, EncodedValue] : Segment | SplitBy( '=' ) | VIEW::pairwise )
+                        QueryAppend( DecodeURLFragment( EncodedKey ), DecodeURLFragment( EncodedValue ) );
 
-                default : break;
+                switch( ContentType )
+                {
+                    default : break;
+                    case HTTP::ContentType::Application::FormURLEncoded :
+                    {
+                        for( auto Segment : RequestBody | SplitBy( '&' ) )
+                            for( auto [EncodedKey, EncodedValue] : Segment | SplitBy( '=' ) | VIEW::pairwise )
+                                QueryAppend( DecodeURLFragment( EncodedKey ), DecodeURLFragment( EncodedValue ) );
+                        break;
+                    }
+                    case HTTP::ContentType::MultiPart::FormData :
+                    {
+                        const auto BetweenQuote = Between( '"', '"' );
+                        auto Boundary = GetParam( "CONTENT_TYPE" ) | After( "boundary=" ) | TrimSpace;
+                        auto FullBody = RequestBody | TrimSpace;
+                        if( FullBody.ends_with( "--" ) ) FullBody.remove_suffix( 2 );
+                        for( auto&& Section : FullBody | SplitBy( Boundary ) | VIEW::drop( 1 ) )
+                            for( auto&& [Header, ContentBody] : Section | SplitBy( "\r\n\r\n" ) | VIEW::pairwise )
+                            {
+                                auto Name = Header | After( "name=" ) | BetweenQuote;
+                                if( Name.empty() ) break;  // should never happen ?
+                                auto FileName = Header | After( "filename=" ) | BetweenQuote;
+                                auto ContentType = Header | After( "\r\n" ) | After( "Content-Type:" ) | TrimSpace;
+
+                                if( ContentBody.ends_with( "\r\n--" ) ) ContentBody.remove_suffix( 4 );
+                                if( ContentType.empty() ) { QueryAppend( Name, ContentBody ); }
+                                else
+                                {
+                                    QueryAppend( Name, FileName );
+                                    Files.Storage[Name].emplace_back( FileName, ContentType, ContentBody );
+                                }
+                            }
+                        break;
+                    }
+                    case HTTP::ContentType::Application::Json :
+                    {
+                        Query.Json = Json::parse( RequestBody );
+                        break;
+                    }
+                }
             }
         }
 
@@ -729,10 +809,12 @@ namespace EasyFCGI
                 Parse();
                 return;
             }
-
-            // fail to obtain valid request, reset residual request data & allocation
-            FCGX_InitRequest( FCGX_Request_Ptr.get(), {}, {} );
-            FCGX_Request_Ptr.reset();
+            else
+            {
+                // fail to obtain valid request, reset residual request data & allocation
+                FCGX_InitRequest( FCGX_Request_Ptr.get(), {}, {} );
+                FCGX_Request_Ptr.reset();
+            }
         }
 
         static auto AcceptFrom( FileDescriptor SocketFD ) { return Request{ SocketFD }; }
@@ -741,13 +823,18 @@ namespace EasyFCGI
 
         auto empty() const { return FCGX_Request_Ptr == nullptr; }
 
+        auto operator[]( StrView Key ) const { return Query[Key]; }
+
         auto FlushResponse() -> void
         {
             auto SendLine = [out = FCGX_Request_Ptr->out]( StrView Content = {} ) {
                 if( ! Content.empty() ) FCGX_PutStr( Content.data(), Content.length(), out );
-                FCGX_PutStr( "\r\n", 2, out );
+                FCGX_PutS( "\r\n", out );
             };
-            if( Response.StatusCode == HTTP::StatusCode::NoContent ) { SendLine( "Status: 204\r\n" ); }
+            if( Response.StatusCode == HTTP::StatusCode::NoContent )  //
+            {
+                SendLine( "Status: 204\r\n" );
+            }
             else
             {
                 SendLine( "Status: {}"_FMT( std::to_underlying( Response.StatusCode ) ) );
@@ -763,14 +850,6 @@ namespace EasyFCGI
             if( FCGX_Request_Ptr == nullptr ) return;
             std::println( "{} , {} Request Destruction...", getpid(), std::this_thread::get_id() );
             FlushResponse();
-            // namespace fs = std::filesystem;
-            // for( auto&& [Key, Entry] : Query.Json.items() )
-            //     if( Entry.contains( QueryKey::FileUpload::TemporaryPath ) )
-            //         if( auto PathString = Entry[QueryKey::FileUpload::TemporaryPath].get<std::string>();  //
-            //             PathString.contains( TempPathTemplatePrefix ) )
-            //             if( auto Path = fs::path( PathString );                                           //
-            //                 fs::exists( Path ) )
-            //                 fs::remove( Path );
         }
     };
 
