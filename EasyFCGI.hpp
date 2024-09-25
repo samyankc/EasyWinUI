@@ -643,9 +643,9 @@ namespace EasyFCGI
 
     struct Response
     {
-        std::vector<std::string> Body;
         HTTP::StatusCode StatusCode{ HTTP::StatusCode::OK };
         HTTP::ContentType ContentType{ HTTP::ContentType::Text::Plain };
+        std::vector<std::string> Body;
 
         [[maybe_unused]] decltype( auto ) Set( HTTP::StatusCode NewValue ) { return StatusCode = NewValue, *this; }
         [[maybe_unused]] decltype( auto ) Set( HTTP::ContentType NewValue ) { return ContentType = NewValue, *this; }
@@ -797,7 +797,7 @@ namespace EasyFCGI
             else return Result;
         }
 
-        auto Parse()
+        auto Parse() -> int
         {
             using namespace ParseUtil;
             Query.Json.clear();
@@ -855,18 +855,40 @@ namespace EasyFCGI
                             else
                             {
                                 QueryAppend( Name, FileName );
-                                Files.Storage[Name].emplace_back( FileName, ContentType, ContentBody );
+                                if( ! FileName.empty() || ! ContentBody.empty() )  //
+                                    Files.Storage[Name].emplace_back( FileName, ContentType, ContentBody );
                             }
                         }
                         break;
                     }
                     case HTTP::ContentType::Application::Json :
                     {
-                        Query.Json = Json::parse( Body );
+                        Query.Json = Json::parse( Body, nullptr, false );  // disable exception
+                        if( Query.Json.is_discarded() )                    // parse error
+                        {
+                            // early response with error message
+                            // caller does not see this iteration
+                            // give caller the next request
+                            FCGX_PutS(
+                                "Status: 400\r\n"
+                                "Content-Type: text/html; charset=UTF-8\r\n"
+                                "\r\n"
+                                "Json Parse Error Occured.",
+                                FCGX_Request_Ptr->out );
+
+                            std::println(
+                                "Request Comes with invalid Json.\n"
+                                "Responding 400 Bad Request.\nAccepting new request..." );
+
+                            // re-using FCGX_Request struct, parse again
+                            if( FCGX_Accept_r( FCGX_Request_Ptr.get() ) == 0 ) return Parse();
+                            return -1;
+                        }
                         break;
                     }
                 }
             }
+            return 0;
         }
 
         Request() = default;
@@ -879,15 +901,12 @@ namespace EasyFCGI
                 FCGX_Accept_r( FCGX_Request_Ptr.get() ) == 0 )
             {
                 // FCGX_Request_Ptr ready, setup the rest of request object(parse request)
-                Parse();
-                return;
+                if( Parse() == 0 ) return;
             }
-            else
-            {
-                // fail to obtain valid request, reset residual request data & allocation
-                FCGX_InitRequest( FCGX_Request_Ptr.get(), {}, {} );
-                FCGX_Request_Ptr.reset();
-            }
+
+            // fail to obtain valid request, reset residual request data & allocation
+            FCGX_InitRequest( FCGX_Request_Ptr.get(), {}, {} );
+            FCGX_Request_Ptr.reset();
         }
 
         static auto AcceptFrom( FileDescriptor SocketFD ) { return Request{ SocketFD }; }
