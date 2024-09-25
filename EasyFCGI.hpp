@@ -1,9 +1,5 @@
 #ifndef _EASY_FCGI_HPP
 #define _EASY_FCGI_HPP
-#include <cstddef>
-#include <iterator>
-#include <string_view>
-#include <type_traits>
 #define NO_FCGI_DEFINES
 #include <fcgiapp.h>
 #include <memory>
@@ -16,15 +12,14 @@
 #include <cstdlib>
 #include <source_location>
 #include <filesystem>
+#include <chrono>
 #include <print>
 #include <thread>
-#include <sys/stat.h>
+// #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <csignal>
 #include "json.hpp"
-// #include "EasyString.h"
-// #include <chrono>
 using namespace std::chrono_literals;
 
 // ErrorGuard( Function Call / ErrorCode )
@@ -90,6 +85,18 @@ namespace ParseUtil
         };
         constexpr auto Front = FrontRA{};
 
+        struct BeginRA : RNG::range_adaptor_closure<BeginRA>
+        {
+            constexpr auto static operator()( auto&& Range ) { return RNG::begin( Range ); }
+        };
+        constexpr auto Begin = BeginRA{};
+
+        struct EndRA : RNG::range_adaptor_closure<EndRA>
+        {
+            constexpr auto static operator()( auto&& Range ) { return RNG::end( Range ); }
+        };
+        constexpr auto End = EndRA{};
+
         struct BoundaryRA : RNG::range_adaptor_closure<BoundaryRA>
         {
             constexpr auto static operator()( auto&& Range ) { return std::array{ RNG::begin( Range ), RNG::end( Range ) }; }
@@ -123,7 +130,16 @@ namespace ParseUtil
         struct Search : StrViewPattern, RNG::range_adaptor_closure<Search>
         {
             using StrViewPattern::StrViewPattern;
-            constexpr StrView operator()( StrView Input ) const { return StrView{ RNG::search( Input, Pattern ) }; }
+            constexpr auto operator()( StrView Input ) const -> StrView
+            {
+                if consteval { return StrView{ RNG::search( Input, Pattern ) }; }
+                else
+                {
+                    auto Match = std::search( Input.begin(), Input.end(),  //
+                                              std::boyer_moore_horspool_searcher( Pattern.begin(), Pattern.end() ) );
+                    return { Match, Match == Input.end() ? Match : std::next( Match, Pattern.length() ) };
+                }
+            }
             constexpr StrView In( StrView Input ) const { return operator()( Input ); }
         };
 
@@ -144,9 +160,9 @@ namespace ParseUtil
             using StrViewPattern::StrViewPattern;
             constexpr StrView operator()( StrView Input ) const
             {
-                auto [InputBegin, InputEnd] = Input | Boundary;
-                auto [MatchBegin, MatchEnd] = Input | Search( Pattern ) | Boundary;
-                return { MatchEnd, InputEnd };
+                // auto [InputBegin, InputEnd] = Input | Boundary;
+                // auto [MatchBegin, MatchEnd] = Input | Search( Pattern ) | Boundary;
+                return { Input | Search( Pattern ) | End, Input | End };
             }
         };
 
@@ -173,6 +189,18 @@ namespace ParseUtil
                 }
                 return Counter - OverShoot;
             }
+            constexpr std::size_t In( StrView Input ) const { return operator()( Input ); }
+        };
+
+        struct SplitOnceBy : StrViewPattern, RNG::range_adaptor_closure<SplitOnceBy>
+        {
+            using StrViewPattern::StrViewPattern;
+            constexpr auto operator()( StrView Input ) const
+            {
+                auto Pivot = Input | Search( Pattern );
+                return std::array{ StrView{ Input.begin(), Pivot.begin() },  //
+                                   StrView{ Pivot.end(), Input.end() } };
+            }
         };
 
         struct SplitBy : StrViewPattern, RNG::range_adaptor_closure<SplitBy>
@@ -181,19 +209,27 @@ namespace ParseUtil
             constexpr auto operator()( StrView Input ) const
             {
                 auto Result = std::vector<StrView>();
-                Result.reserve( Input | Count( Pattern ) );
-                if( Input.empty() )
-                {
-                    Result.push_back( Input );
-                    return Result;
-                }
-                while( ! Input.empty() )
-                {
-                    auto Segment = Input | Before( Pattern );
-                    if( Segment.end() == Input.end() ) Segment = Input;
-                    Result.push_back( Segment );
-                    Input = StrView{ Segment.end(), Input.end() } | After( Pattern );
-                }
+                Result.reserve( Count( Pattern ).In( Input ) + 1 );
+                // if( Input.empty() )
+                // {
+                //     Result.push_back( Input );
+                //     return Result;
+                // }
+                // while( ! Input.empty() )
+                // {
+                //     auto Segment = Input | Before( Pattern );
+                //     if( Segment.end() == Input.end() ) Segment = Input;
+                //     Result.push_back( Segment );
+                //     Input = StrView{ Segment.end(), Input.end() } | After( Pattern );
+                // }
+
+                auto EndsWithPattern = Input.ends_with( Pattern );
+                do {  //
+                    auto Pivot = Input | Search( Pattern );
+                    std::forward_as_tuple( std::back_inserter( Result ), Input ) = Input | SplitOnceBy( Pattern );
+                } while( ! Input.empty() );
+                if( EndsWithPattern ) Result.push_back( Input );
+
                 return Result;
             }
         };
@@ -202,6 +238,7 @@ namespace ParseUtil
         {
             StrView Input;
             constexpr auto By( StrViewPattern Pattern ) const { return Input | SplitBy( Pattern ); }
+            constexpr auto OnceBy( StrViewPattern Pattern ) const { return Input | SplitOnceBy( Pattern ); }
         };
 
         template<typename NumericType, int BASE>  //
@@ -679,21 +716,55 @@ namespace EasyFCGI
 
         struct Files
         {
-            enum OverWriteOptions : unsigned char {
-                Abort = 0,
-                OverWrite = 0b1,
-                RenameOldFile = 0b10,
-                RenameNewFile = 0b100,
-            };
+            enum class OverWriteOptions : unsigned char { Abort, OverWrite, RenameOldFile, RenameNewFile };
+
             struct FileView
             {
                 StrView FileName;
                 StrView ContentType;
                 StrView ContentBody;
-                auto SaveAs( const FS::path& Path, const OverWriteOptions = Abort ) const {
 
+                static auto NewFilePath( const FS::path& Path ) -> FS::path
+                {
+                    auto ResultPath = Path;
+                    auto FileExtension = Path.extension().string();
+                    auto OriginalStem = Path.stem();
+                    do {
+                        auto Now = std::chrono::system_clock::now();
+                        auto TimeStampSuffix = ".{:%Y.%m.%d.%H.%M.%S}"_FMT( Now );
+                        auto NewFileName = OriginalStem;
+                        NewFileName += StrView{ TimeStampSuffix }.substr( 0, 24 );
+                        ResultPath
+                            .replace_filename( NewFileName )  //
+                            .replace_extension( FileExtension );
+                    } while( FS::exists( ResultPath ) );
+                    return ResultPath;
+                }
+
+                auto SaveAs( const FS::path& Path, const OverWriteOptions OverWriteOption = OverWriteOptions::Abort ) const -> FS::path
+                {
+                    auto ParentDir = Path.parent_path();
+                    if( ! FS::exists( ParentDir ) ) FS::create_directories( ParentDir );
+
+                    auto ResultPath = Path;
+                    if( FS::exists( ResultPath ) )  //
+                        switch( OverWriteOption )
+                        {
+                            using enum OverWriteOptions;
+                            case Abort :         return ResultPath;
+                            case OverWrite :     break;
+                            case RenameOldFile : FS::rename( Path, NewFilePath( Path ) ); break;
+                            case RenameNewFile : ResultPath = NewFilePath( Path ); break;
+                        }
+
+                    auto FileFD = fopen( ResultPath.c_str(), "wb" );
+                    std::fwrite( ContentBody.data(), sizeof( 1 [ContentBody.data()] ), ContentBody.size(), FileFD );
+                    std::fclose( FileFD );
+
+                    return ResultPath;
                 };
             };
+
             std::map<StrView, std::vector<FileView>> Storage;
             auto operator[]( StrView Key, std::size_t Index = 0 ) const -> FileView
             {
@@ -709,7 +780,7 @@ namespace EasyFCGI
         HTTP::ContentType ContentType;
         QueryExecutor<Json> Query;
         struct Files Files;
-        std::string RequestBody;
+        std::string Body;
 
         // std::size_t ContentLength;
         // std::string_view ScriptName;
@@ -731,15 +802,15 @@ namespace EasyFCGI
             using namespace ParseUtil;
             Query.Json.clear();
             Files.Storage.clear();
-            RequestBody.clear();
+            Body.clear();
 
             Method = GetParam( "REQUEST_METHOD" );
             ContentType = GetParam( "CONTENT_TYPE" );
 
-            RequestBody.resize_and_overwrite( GetParam( "CONTENT_LENGTH" ) | ConvertTo<int> | FallBack( 0 ),    //
-                                              [Stream = FCGX_Request_Ptr->in]( char* Buffer, std::size_t N ) {  //
-                                                  return FCGX_GetStr( Buffer, N, Stream );
-                                              } );
+            Body.resize_and_overwrite( GetParam( "CONTENT_LENGTH" ) | ConvertTo<int> | FallBack( 0 ),    //
+                                       [Stream = FCGX_Request_Ptr->in]( char* Buffer, std::size_t N ) {  //
+                                           return FCGX_GetStr( Buffer, N, Stream );
+                                       } );
 
             auto QueryAppend = [&Result = Query.Json]( std::string_view Key, auto&& Value ) {
                 if( Key.empty() ) return;
@@ -750,7 +821,7 @@ namespace EasyFCGI
                 // read query string, then request body
                 // duplicated key-value will be overwritten
                 for( auto Segment : GetParam( "QUERY_STRING" ) | SplitBy( '&' ) )
-                    for( auto [EncodedKey, EncodedValue] : Segment | SplitBy( '=' ) | VIEW::pairwise )
+                    for( auto [EncodedKey, EncodedValue] : Segment | SplitOnceBy( '=' ) | VIEW::pairwise )
                         QueryAppend( DecodeURLFragment( EncodedKey ), DecodeURLFragment( EncodedValue ) );
 
                 switch( ContentType )
@@ -758,8 +829,8 @@ namespace EasyFCGI
                     default : break;
                     case HTTP::ContentType::Application::FormURLEncoded :
                     {
-                        for( auto Segment : RequestBody | SplitBy( '&' ) )
-                            for( auto [EncodedKey, EncodedValue] : Segment | SplitBy( '=' ) | VIEW::pairwise )
+                        for( auto Segment : Body | SplitBy( '&' ) )
+                            for( auto [EncodedKey, EncodedValue] : Segment | SplitOnceBy( '=' ) | VIEW::pairwise )
                                 QueryAppend( DecodeURLFragment( EncodedKey ), DecodeURLFragment( EncodedValue ) );
                         break;
                     }
@@ -767,29 +838,31 @@ namespace EasyFCGI
                     {
                         const auto BetweenQuote = Between( '"', '"' );
                         auto Boundary = GetParam( "CONTENT_TYPE" ) | After( "boundary=" ) | TrimSpace;
-                        auto FullBody = RequestBody | TrimSpace;
+                        auto FullBody = Body | TrimSpace;
                         if( FullBody.ends_with( "--" ) ) FullBody.remove_suffix( 2 );
                         for( auto&& Section : FullBody | SplitBy( Boundary ) | VIEW::drop( 1 ) )
-                            for( auto&& [Header, ContentBody] : Section | SplitBy( "\r\n\r\n" ) | VIEW::pairwise )
-                            {
-                                auto Name = Header | After( "name=" ) | BetweenQuote;
-                                if( Name.empty() ) break;  // should never happen ?
-                                auto FileName = Header | After( "filename=" ) | BetweenQuote;
-                                auto ContentType = Header | After( "\r\n" ) | After( "Content-Type:" ) | TrimSpace;
+                        {
+                            auto Header = Section | Before( "\r\n\r\n" );
+                            auto ContentBody = Section | After( "\r\n\r\n" );
 
-                                if( ContentBody.ends_with( "\r\n--" ) ) ContentBody.remove_suffix( 4 );
-                                if( ContentType.empty() ) { QueryAppend( Name, ContentBody ); }
-                                else
-                                {
-                                    QueryAppend( Name, FileName );
-                                    Files.Storage[Name].emplace_back( FileName, ContentType, ContentBody );
-                                }
+                            auto Name = Header | After( "name=" ) | BetweenQuote;
+                            if( Name.empty() ) break;  // should never happen ?
+                            auto FileName = Header | After( "filename=" ) | BetweenQuote;
+                            auto ContentType = Header | After( "\r\n" ) | After( "Content-Type:" ) | TrimSpace;
+
+                            if( ContentBody.ends_with( "\r\n--" ) ) ContentBody.remove_suffix( 4 );
+                            if( ContentType.empty() ) { QueryAppend( Name, ContentBody ); }
+                            else
+                            {
+                                QueryAppend( Name, FileName );
+                                Files.Storage[Name].emplace_back( FileName, ContentType, ContentBody );
                             }
+                        }
                         break;
                     }
                     case HTTP::ContentType::Application::Json :
                     {
-                        Query.Json = Json::parse( RequestBody );
+                        Query.Json = Json::parse( Body );
                         break;
                     }
                 }
