@@ -210,22 +210,10 @@ namespace ParseUtil
             {
                 auto Result = std::vector<StrView>();
                 Result.reserve( Count( Pattern ).In( Input ) + 1 );
-                // if( Input.empty() )
-                // {
-                //     Result.push_back( Input );
-                //     return Result;
-                // }
-                // while( ! Input.empty() )
-                // {
-                //     auto Segment = Input | Before( Pattern );
-                //     if( Segment.end() == Input.end() ) Segment = Input;
-                //     Result.push_back( Segment );
-                //     Input = StrView{ Segment.end(), Input.end() } | After( Pattern );
-                // }
 
                 auto EndsWithPattern = Input.ends_with( Pattern );
-                do {  //
-                    auto Pivot = Input | Search( Pattern );
+                do {
+                    // auto Pivot = Input | Search( Pattern );
                     std::forward_as_tuple( std::back_inserter( Result ), Input ) = Input | SplitOnceBy( Pattern );
                 } while( ! Input.empty() );
                 if( EndsWithPattern ) Result.push_back( Input );
@@ -547,9 +535,6 @@ namespace EasyFCGI
         constexpr static auto SocketDirectoryPrefix = StrView{ "/dev/shm/" };
         constexpr static auto SocketExtensionSuffix = StrView{ ".sock" };
 
-        // constexpr static auto TempPathTemplate = StrView{ "/dev/shm/XXXXXX" };
-        // constexpr static auto TempPathTemplatePrefix = TempPathTemplate | PU::Before( "XXXXXX" );
-
         constexpr static auto CommandLineBufferMax = 4096uz;
         inline static auto CommandLineBuffer = std::vector<char>{};
         inline static auto CommandLine = [] {
@@ -800,7 +785,7 @@ namespace EasyFCGI
         auto Parse() -> int
         {
             using namespace ParseUtil;
-            Query.Json.clear();
+            Query.Json = {}; // .clear() cannot reset residual discarded state
             Files.Storage.clear();
             Body.clear();
 
@@ -945,9 +930,9 @@ namespace EasyFCGI
         }
     };
 
-    // RequestContainer is not thread safe by default.
+    // PseudoRequestQueue is not thread safe by default.
     // It is expected to be handled by one managing thread
-    // For handling RequestContainer by multiple threads,
+    // For handling PseudoRequestQueue by multiple threads,
     // users should manage their own mutex
     struct PseudoRequestQueue
     {
