@@ -1,6 +1,5 @@
 #ifndef _EASY_FCGI_HPP
 #define _EASY_FCGI_HPP
-#define NO_FCGI_DEFINES
 #include <fcgiapp.h>
 #include <memory>
 #include <concepts>
@@ -10,29 +9,16 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
-#include <source_location>
 #include <filesystem>
 #include <chrono>
 #include <print>
 #include <thread>
-// #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <csignal>
 #include "json.hpp"
-using namespace std::chrono_literals;
 
-// ErrorGuard( Function Call / ErrorCode )
-// check ErrorCode :   0    =>  program proceeds
-//                   other  =>  invoke std::exit(ErrorCode)
-#define ErrorGuard( OP ) ErrorGuard_impl( OP, #OP )
-auto ErrorGuard_impl( std::integral auto ErrorCode, std::string_view OperationTitle,  //
-                      std::string_view CallerName = std::source_location::current().function_name() )
-{
-    if( ErrorCode == 0 ) return std::println( "[ OK ]  {} : {}", CallerName, OperationTitle );
-    std::println( "[ Fail, Error = {} ]  {} : {}", ErrorCode, CallerName, OperationTitle );
-    std::exit( ErrorCode );
-}
+using namespace std::chrono_literals;
 
 namespace ParseUtil
 {
@@ -48,7 +34,7 @@ namespace ParseUtil
     {
         char Data[N];
         constexpr FixedString( const char ( &Src )[N] ) noexcept { std::copy_n( Src, N, Data ); }
-        constexpr operator StrView() const noexcept { return { Data, N }; }
+        constexpr operator StrView() const noexcept { return { Data, N - 1 }; }
     };
 
     template<FixedString FSTR> constexpr auto operator""_FMT() noexcept
@@ -73,37 +59,32 @@ namespace ParseUtil
 
     inline namespace RangeAdaptor
     {
-        struct CollapseToEndRA : RNG::range_adaptor_closure<CollapseToEndRA>
+        constexpr struct CollapseToEndRA : RNG::range_adaptor_closure<CollapseToEndRA>
         {
             constexpr auto static operator()( StrView Input ) { return StrView{ Input.end(), Input.end() }; }
-        };
-        constexpr auto CollapseToEnd = CollapseToEndRA{};
+        } CollapseToEnd;
 
-        struct FrontRA : RNG::range_adaptor_closure<FrontRA>
+        constexpr struct FrontRA : RNG::range_adaptor_closure<FrontRA>
         {
             constexpr auto static operator()( auto&& Range ) { return *std::begin( Range ); }
-        };
-        constexpr auto Front = FrontRA{};
+        } Front;
 
-        struct BeginRA : RNG::range_adaptor_closure<BeginRA>
+        constexpr struct BeginRA : RNG::range_adaptor_closure<BeginRA>
         {
             constexpr auto static operator()( auto&& Range ) { return RNG::begin( Range ); }
-        };
-        constexpr auto Begin = BeginRA{};
+        } Begin;
 
-        struct EndRA : RNG::range_adaptor_closure<EndRA>
+        constexpr struct EndRA : RNG::range_adaptor_closure<EndRA>
         {
             constexpr auto static operator()( auto&& Range ) { return RNG::end( Range ); }
-        };
-        constexpr auto End = EndRA{};
+        } End;
 
-        struct BoundaryRA : RNG::range_adaptor_closure<BoundaryRA>
+        constexpr struct BoundaryRA : RNG::range_adaptor_closure<BoundaryRA>
         {
             constexpr auto static operator()( auto&& Range ) { return std::array{ RNG::begin( Range ), RNG::end( Range ) }; }
-        };
-        constexpr auto Boundary = BoundaryRA{};
+        } Boundary;
 
-        struct TrimSpaceRA : RNG::range_adaptor_closure<TrimSpaceRA>
+        constexpr struct TrimSpaceRA : RNG::range_adaptor_closure<TrimSpaceRA>
         {
             constexpr static StrView operator()( StrView Input )
             {
@@ -113,8 +94,7 @@ namespace ParseUtil
                 return { &*RNG::begin( SpaceRemoved ),                               //
                          &*RNG::rbegin( SpaceRemoved ) + 1 };
             }
-        };
-        constexpr auto TrimSpace = TrimSpaceRA{};
+        } TrimSpace;
 
         struct Trim : StrViewPattern, RNG::range_adaptor_closure<Trim>
         {
@@ -262,7 +242,7 @@ namespace ParseUtil
             }
         };
 
-        struct RestoreSpaceCharRA : RNG::range_adaptor_closure<RestoreSpaceCharRA>
+        constexpr struct RestoreSpaceCharRA : RNG::range_adaptor_closure<RestoreSpaceCharRA>
         {
             constexpr static auto operator()( const auto& Input )
             {
@@ -272,8 +252,7 @@ namespace ParseUtil
                 } );
                 return Result;
             };
-        };
-        constexpr auto RestoreSpaceChar = RestoreSpaceCharRA{};
+        } RestoreSpaceChar;
 
         struct SliceAt : RNG::range_adaptor_closure<SliceAt>
         {
@@ -339,8 +318,6 @@ using ParseUtil::operator""_FMT;
 
 namespace HTTP
 {
-    // using namespace EasyString;
-    // using namespace ParseUtil;
     namespace PU = ParseUtil;
 
     struct RequestMethod
@@ -512,7 +489,6 @@ namespace HTTP
 namespace EasyFCGI
 {
     namespace FS = std::filesystem;
-    namespace PU = ParseUtil;
     namespace RNG = std::ranges;
     namespace VIEW = std::views;
     using Json = nlohmann::json;
@@ -572,18 +548,26 @@ namespace EasyFCGI
         TerminationSignal = true;
     };
 
-    extern "C" void OS_LibShutdown();  // <fcgios.h>
+    extern "C" void OS_LibShutdown();  // for omitting <fcgios.h>
     static auto ServerInitializationComplete = std::atomic<bool>{ false };
     static auto ServerInitialization = [] {
         if( ServerInitializationComplete ) return;
         auto FALSE = false;
         if( ! ServerInitializationComplete.compare_exchange_strong( FALSE, true ) ) return;
 
-        ErrorGuard( FCGX_Init() );
-        std::atexit( OS_LibShutdown );
-        std::atexit( [] { std::println( "Porgram exiting from standard exit pathway." ); } );
-        std::signal( SIGINT, TerminationHandler );
-        std::signal( SIGTERM, TerminationHandler );
+        if( auto ErrorCode = FCGX_Init(); ErrorCode == 0 )
+        {
+            std::println( "[ OK ]  ServerInitialization : FCGX_Init" );
+            std::atexit( OS_LibShutdown );
+            std::atexit( [] { std::println( "Porgram exiting from standard exit pathway." ); } );
+            std::signal( SIGINT, TerminationHandler );
+            std::signal( SIGTERM, TerminationHandler );
+        }
+        else
+        {
+            std::println( "[ Fail, Error = {} ]  ServerInitialization : FCGX_Init", ErrorCode );
+            std::exit( ErrorCode );
+        }
     };
 
     struct FileDescriptor
@@ -785,7 +769,7 @@ namespace EasyFCGI
         auto Parse() -> int
         {
             using namespace ParseUtil;
-            Query.Json = {}; // .clear() cannot reset residual discarded state
+            Query.Json = {};  // .clear() cannot reset residual discarded state
             Files.Storage.clear();
             Body.clear();
 
@@ -798,8 +782,7 @@ namespace EasyFCGI
                                        } );
 
             auto QueryAppend = [&Result = Query.Json]( std::string_view Key, auto&& Value ) {
-                if( Key.empty() ) return;
-                Result[Key].push_back( std::forward<decltype( Value )>( Value ) );
+                if( ! Key.empty() ) Result[Key].push_back( std::forward<decltype( Value )>( Value ) );
             };
 
             {
