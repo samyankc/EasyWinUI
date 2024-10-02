@@ -1,6 +1,9 @@
 #ifndef _EASY_FCGI_HPP
 #define _EASY_FCGI_HPP
 #include <fcgiapp.h>
+
+#include <signal.h>
+
 #include <memory>
 #include <concepts>
 #include <utility>
@@ -15,7 +18,7 @@
 #include <thread>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <csignal>
+
 #include "json.hpp"
 
 using namespace std::chrono_literals;
@@ -48,43 +51,43 @@ namespace ParseUtil
             : CharPattern{ Other.CharPattern },
               Pattern{ Other.CharPattern == '\0' ? Other.Pattern : StrView{ &CharPattern, 1 } }
         {}
-        constexpr StrViewPattern( StrView Pattern ) : Pattern{ Pattern }, CharPattern{ '\0' } {}
+        constexpr StrViewPattern( StrView Pattern ) : CharPattern{ '\0' }, Pattern{ Pattern } {}
         constexpr StrViewPattern( char CharPattern ) : CharPattern{ CharPattern }, Pattern{ &this->CharPattern, 1 } {}
         constexpr operator StrView() const { return Pattern; }
 
       protected:
-        StrView Pattern;
         char CharPattern;
+        StrView Pattern;
     };
 
     inline namespace RangeAdaptor
     {
-        constexpr struct CollapseToEndRA : RNG::range_adaptor_closure<CollapseToEndRA>
+        [[maybe_unused]] constexpr struct CollapseToEndRA : RNG::range_adaptor_closure<CollapseToEndRA>
         {
             constexpr auto static operator()( StrView Input ) { return StrView{ Input.end(), Input.end() }; }
         } CollapseToEnd;
 
-        constexpr struct FrontRA : RNG::range_adaptor_closure<FrontRA>
+        [[maybe_unused]] constexpr struct FrontRA : RNG::range_adaptor_closure<FrontRA>
         {
             constexpr auto static operator()( auto&& Range ) { return *std::begin( Range ); }
         } Front;
 
-        constexpr struct BeginRA : RNG::range_adaptor_closure<BeginRA>
+        [[maybe_unused]] constexpr struct BeginRA : RNG::range_adaptor_closure<BeginRA>
         {
             constexpr auto static operator()( auto&& Range ) { return RNG::begin( Range ); }
         } Begin;
 
-        constexpr struct EndRA : RNG::range_adaptor_closure<EndRA>
+        [[maybe_unused]] constexpr struct EndRA : RNG::range_adaptor_closure<EndRA>
         {
             constexpr auto static operator()( auto&& Range ) { return RNG::end( Range ); }
         } End;
 
-        constexpr struct BoundaryRA : RNG::range_adaptor_closure<BoundaryRA>
+        [[maybe_unused]] constexpr struct BoundaryRA : RNG::range_adaptor_closure<BoundaryRA>
         {
             constexpr auto static operator()( auto&& Range ) { return std::array{ RNG::begin( Range ), RNG::end( Range ) }; }
         } Boundary;
 
-        constexpr struct TrimSpaceRA : RNG::range_adaptor_closure<TrimSpaceRA>
+        [[maybe_unused]] constexpr struct TrimSpaceRA : RNG::range_adaptor_closure<TrimSpaceRA>
         {
             constexpr static StrView operator()( StrView Input )
             {
@@ -275,7 +278,7 @@ namespace ParseUtil
             }
         };
 
-        constexpr struct RestoreSpaceCharRA : RNG::range_adaptor_closure<RestoreSpaceCharRA>
+        [[maybe_unused]] constexpr struct RestoreSpaceCharRA : RNG::range_adaptor_closure<RestoreSpaceCharRA>
         {
             constexpr static auto operator()( const auto& Input )
             {
@@ -388,8 +391,7 @@ namespace HTTP
                 CASE_RETURN( DELETE );
                 CASE_RETURN( CONNECT );
                 CASE_RETURN( OPTIONS );
-            deafult:
-                CASE_RETURN( INVALID );
+                default : CASE_RETURN( INVALID );
             }
             std::unreachable();
         }
@@ -581,10 +583,10 @@ namespace EasyFCGI
     };
 
     static auto TerminationSignal = std::atomic<bool>{ false };
-    static auto TerminationHandler = []( int Signal ) {
-        std::println( "\nReceiving Signal : {}", Signal );
-        TerminationSignal = true;
-    };
+    // static auto TerminationHandler = []( int Signal ) {
+    //     std::println( "\nReceiving Signal : {}", Signal );
+    //     TerminationSignal = true;
+    // };
 
     extern "C" void OS_LibShutdown();  // for omitting <fcgios.h>
     static auto ServerInitializationComplete = std::atomic<bool>{ false };
@@ -598,8 +600,22 @@ namespace EasyFCGI
             std::println( "[ OK ]  ServerInitialization : FCGX_Init" );
             std::atexit( OS_LibShutdown );
             std::atexit( [] { std::println( "Porgram exiting from standard exit pathway." ); } );
-            std::signal( SIGINT, TerminationHandler );
-            std::signal( SIGTERM, TerminationHandler );
+
+            struct sigaction SignalAction;
+            sigemptyset( &SignalAction.sa_mask );
+            SignalAction.sa_handler = []( int Signal ) {
+                TerminationSignal = true;
+                FCGX_ShutdownPending();
+                std::println( "\nReceiving Signal : {}", Signal );
+            };
+            SignalAction.sa_flags = 0;  // disable SA_RESTART
+            
+            ::sigaction( SIGINT, &SignalAction, nullptr );
+
+            // ::sigaction( SIGTERM, &SignalAction, nullptr );
+
+            // ::signal( SIGINT, TerminationHandler );
+            // ::signal( SIGTERM, TerminationHandler );
         }
         else
         {
@@ -985,6 +1001,8 @@ namespace EasyFCGI
                 if( Parse() == 0 ) return;
             }
 
+            if( TerminationSignal ) std::println( "Interrupted Accept." );
+
             // fail to obtain valid request, reset residual request data & allocation
             FCGX_InitRequest( FCGX_Request_Ptr.get(), {}, {} );
             FCGX_Request_Ptr.reset();
@@ -1121,13 +1139,13 @@ namespace EasyFCGI
             std::println( "Unix Socket Path : {}", SocketFD.UnixSocketName().c_str() );
             std::println( "Ready to accept requests..." );
 
-            std::thread( [FD = SocketFD] {
-                // todo: use CV nofity
-                while( ! TerminationSignal ) std::this_thread::sleep_for( 500ms );
-                FCGX_ShutdownPending();       // [os_unix.c:108] shutdownPending = TRUE;
-                ::shutdown( FD, SHUT_RDWR );  // cause accept() to stop blocking
-                // ::close( FD );
-            } ).detach();
+            // std::thread( [FD = SocketFD] {
+            //     // todo: use CV nofity
+            //     while( ! TerminationSignal ) std::this_thread::sleep_for( 500ms );
+            //     FCGX_ShutdownPending();       // [os_unix.c:108] shutdownPending = TRUE;
+            //     ::shutdown( FD, SHUT_RDWR );  // cause accept() to stop blocking
+            //     // ::close( FD );
+            // } ).detach();
         }
 
         // Server() : Server{ FileDescriptor{} }
