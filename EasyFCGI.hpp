@@ -1,9 +1,7 @@
 #ifndef _EASY_FCGI_HPP
 #define _EASY_FCGI_HPP
 #include <fcgiapp.h>
-
-#include <signal.h>
-
+#include <csignal>
 #include <memory>
 #include <concepts>
 #include <utility>
@@ -15,7 +13,6 @@
 #include <filesystem>
 #include <chrono>
 #include <print>
-#include <thread>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -409,7 +406,7 @@ namespace HTTP
     };
 
     enum class StatusCode : unsigned short {
-        HeaderAlreadySent = 0,
+        InternalUse_HeaderAlreadySent = 0,
         OK = 200,
         Created = 201,
         Accepted = 202,
@@ -583,17 +580,11 @@ namespace EasyFCGI
     };
 
     static auto TerminationSignal = std::atomic<bool>{ false };
-    // static auto TerminationHandler = []( int Signal ) {
-    //     std::println( "\nReceiving Signal : {}", Signal );
-    //     TerminationSignal = true;
-    // };
 
-    extern "C" void OS_LibShutdown();  // for omitting <fcgios.h>
-    static auto ServerInitializationComplete = std::atomic<bool>{ false };
+    extern "C" void OS_LibShutdown();  // for omitting #include <fcgios.h>
     static auto ServerInitialization = [] {
-        if( ServerInitializationComplete ) return;
-        auto FALSE = false;
-        if( ! ServerInitializationComplete.compare_exchange_strong( FALSE, true ) ) return;
+        static auto ServerInitializationComplete = false;
+        if( std::exchange( ServerInitializationComplete, true ) ) return;
 
         if( auto ErrorCode = FCGX_Init(); ErrorCode == 0 )
         {
@@ -603,19 +594,14 @@ namespace EasyFCGI
 
             struct sigaction SignalAction;
             sigemptyset( &SignalAction.sa_mask );
+            SignalAction.sa_flags = 0;  // disable SA_RESTART
             SignalAction.sa_handler = []( int Signal ) {
                 TerminationSignal = true;
                 FCGX_ShutdownPending();
                 std::println( "\nReceiving Signal : {}", Signal );
             };
-            SignalAction.sa_flags = 0;  // disable SA_RESTART
-            
             ::sigaction( SIGINT, &SignalAction, nullptr );
-
-            // ::sigaction( SIGTERM, &SignalAction, nullptr );
-
-            // ::signal( SIGINT, TerminationHandler );
-            // ::signal( SIGTERM, TerminationHandler );
+            ::sigaction( SIGTERM, &SignalAction, nullptr );
         }
         else
         {
@@ -1001,9 +987,10 @@ namespace EasyFCGI
                 if( Parse() == 0 ) return;
             }
 
-            if( TerminationSignal ) std::println( "Interrupted Accept." );
+            if( TerminationSignal.load() ) std::println( "Interrupted Accept." );
 
             // fail to obtain valid request, reset residual request data & allocation
+            // custom deleter of FCGX_Request_Ptr will do the cleanup
             FCGX_InitRequest( FCGX_Request_Ptr.get(), {}, {} );
             FCGX_Request_Ptr.reset();
         }
@@ -1056,7 +1043,7 @@ namespace EasyFCGI
         auto FlushHeader()
         {
             auto StatusCode = Response.StatusCode;
-            if( Response.StatusCode == HTTP::StatusCode::HeaderAlreadySent ) return StatusCode;
+            if( Response.StatusCode == HTTP::StatusCode::InternalUse_HeaderAlreadySent ) return StatusCode;
             if( Response.StatusCode == HTTP::StatusCode::NoContent )  //
             {
                 SendLine( "Status: 204\r\n" );
@@ -1070,21 +1057,23 @@ namespace EasyFCGI
             for( auto&& [K, V] : Response.Header ) SendLine( "{}: {}", K, V );
             SendLine();
             FCGX_FFlush( FCGX_Request_Ptr->out );
-            Response.StatusCode = HTTP::StatusCode::HeaderAlreadySent;
+            Response.StatusCode = HTTP::StatusCode::InternalUse_HeaderAlreadySent;
             return StatusCode;
         }
 
-        auto FlushResponse() -> void
+        auto FlushResponse()
         {
             Send( Response.Body );
-            FCGX_FFlush( FCGX_Request_Ptr->out );
             Response.Body.clear();
+            return FCGX_FFlush( FCGX_Request_Ptr->out );
         }
 
         virtual ~Request()
         {
             if( FCGX_Request_Ptr == nullptr ) return;
-            std::println( "{} , {} Request Termination...", getpid(), std::this_thread::get_id() );
+            std::println( "ID: [ {:2},{:2} ] Request Complete...",  //
+                          FCGX_Request_Ptr->ipcFd,                  //
+                          FCGX_Request_Ptr->requestId );
             if( FlushHeader() == HTTP::StatusCode::NoContent ) return;
             FlushResponse();
         }
@@ -1121,6 +1110,10 @@ namespace EasyFCGI
 
             // start accepting new request from socket
             PendingRequest = Request::AcceptFrom( Queue.SocketFD );
+            if( ! PendingRequest.empty() )
+                std::println( "Pending Request ID : [{:2},{:2}]",      //
+                              PendingRequest.FCGX_Request_Ptr->ipcFd,  //
+                              PendingRequest.FCGX_Request_Ptr->requestId );
             return PendingRequest.empty();
         }
 
@@ -1138,14 +1131,6 @@ namespace EasyFCGI
             std::println( "Server file descriptor : {}", static_cast<int>( SocketFD ) );
             std::println( "Unix Socket Path : {}", SocketFD.UnixSocketName().c_str() );
             std::println( "Ready to accept requests..." );
-
-            // std::thread( [FD = SocketFD] {
-            //     // todo: use CV nofity
-            //     while( ! TerminationSignal ) std::this_thread::sleep_for( 500ms );
-            //     FCGX_ShutdownPending();       // [os_unix.c:108] shutdownPending = TRUE;
-            //     ::shutdown( FD, SHUT_RDWR );  // cause accept() to stop blocking
-            //     // ::close( FD );
-            // } ).detach();
         }
 
         // Server() : Server{ FileDescriptor{} }
