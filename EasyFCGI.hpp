@@ -866,6 +866,8 @@ namespace EasyFCGI
 
         auto Parse() -> int
         {
+            FCGX_Request_Ptr->keepConnection = 0;  // disable connection reuse until fixed
+
             using namespace ParseUtil;
             Query.Json = {};  // .clear() cannot reset residual discarded state
             Files.Storage.clear();
@@ -1086,7 +1088,7 @@ namespace EasyFCGI
     struct PseudoRequestQueue
     {
         FileDescriptor SocketFD;
-        Request PendingRequest;
+        Request PendingRequest{};
 
         struct Sentinel
         {};
@@ -1115,6 +1117,7 @@ namespace EasyFCGI
                 std::println( "Pending Request ID : [{:2},{:2}]",      //
                               PendingRequest.FCGX_Request_Ptr->ipcFd,  //
                               PendingRequest.FCGX_Request_Ptr->requestId );
+
             return PendingRequest.empty();
         }
 
