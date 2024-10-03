@@ -1109,6 +1109,7 @@ namespace EasyFCGI
             if( TerminationSignal.load() ) return true;
 
             // start accepting new request from socket
+            std::println( "Waiting for new request..." );
             PendingRequest = Request::AcceptFrom( Queue.SocketFD );
             if( ! PendingRequest.empty() )
                 std::println( "Pending Request ID : [{:2},{:2}]",      //
