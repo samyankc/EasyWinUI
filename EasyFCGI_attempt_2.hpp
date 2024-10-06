@@ -13,8 +13,6 @@
 #include <filesystem>
 #include <chrono>
 #include <print>
-#include <poll.h>
-#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -355,27 +353,9 @@ namespace HTTP
 {
     namespace PU = ParseUtil;
 
-    enum class StatusCode : unsigned short {
-        InternalUse_HeaderAlreadySent = 0,
-        OK = 200,
-        Created = 201,
-        Accepted = 202,
-        NoContent = 204,
-        BadRequest = 400,
-        Unauthorized = 401,
-        Forbidden = 403,
-        NotFound = 404,
-        MethodNotAllowed = 405,
-        UnsupportedMediaType = 415,
-        UnprocessableEntity = 422,
-        InternalServerError = 500,
-        NotImplemented = 501,
-        ServiceUnavailable = 503,
-    };
-
     struct RequestMethod
     {
-        enum class EnumValue : unsigned short { INVALID, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
+        enum class EnumValue : unsigned short { INVALID = 0, GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH };
         EnumValue Verb;
         using enum EnumValue;
 
@@ -425,10 +405,28 @@ namespace HTTP
         constexpr operator EnumValue() const { return Verb; }
     };
 
+    enum class StatusCode : unsigned short {
+        InternalUse_HeaderAlreadySent = 0,
+        OK = 200,
+        Created = 201,
+        Accepted = 202,
+        NoContent = 204,
+        BadRequest = 400,
+        Unauthorized = 401,
+        Forbidden = 403,
+        NotFound = 404,
+        MethodNotAllowed = 405,
+        UnsupportedMediaType = 415,
+        UnprocessableEntity = 422,
+        InternalServerError = 500,
+        NotImplemented = 501,
+        ServiceUnavailable = 503,
+    };
+
     struct ContentType
     {
         enum class EnumValue : unsigned short {
-            TEXT_PLAIN,
+            TEXT_PLAIN = 0,
             TEXT_HTML,
             TEXT_XML,
             TEXT_CSV,
@@ -477,7 +475,7 @@ namespace HTTP
                 case MULTIPART_FORM_DATA :               return "multipart/form-data";
                 case MULTIPART_BYTERANGES :              return "multipart/byteranges";
                 // default :
-                case UNKNOWN_MIME_TYPE :                 return ToStringView( TEXT_HTML );
+                case UNKNOWN_MIME_TYPE :                 return ToStringView( TEXT_PLAIN );
             }
             return "";
         }
@@ -1171,7 +1169,7 @@ namespace EasyFCGI
             int rawWrite;             /* writer: write data without stream headers */
             FCGX_Request* reqDataPtr; /* request data not specific to one stream */
         } FCGX_Stream_Data;
-    }  // namespace DebugInfo
+    }  // namespace Debug
 
 }  // namespace EasyFCGI
 
