@@ -46,12 +46,13 @@ namespace ParseUtil
 
     struct StrViewPattern
     {
-        constexpr StrViewPattern( const StrViewPattern& Other )
+        constexpr StrViewPattern() : CharPattern{}, Pattern{} {}
+        constexpr StrViewPattern( const StrViewPattern& Other )  //
             : CharPattern{ Other.CharPattern },
-              Pattern{ Other.CharPattern == '\0' ? Other.Pattern : StrView{ &CharPattern, 1 } }
+              Pattern{ Other.Pattern.data() == &Other.CharPattern ? StrView{ &CharPattern, 1 } : Other.Pattern }
         {}
-        constexpr StrViewPattern( StrView Pattern ) : CharPattern{ '\0' }, Pattern{ Pattern } {}
-        constexpr StrViewPattern( char CharPattern ) : CharPattern{ CharPattern }, Pattern{ &this->CharPattern, 1 } {}
+        constexpr StrViewPattern( StrView OtherPattern ) : CharPattern{}, Pattern{ OtherPattern } {}
+        constexpr StrViewPattern( char OtherCharPattern ) : CharPattern{ OtherCharPattern }, Pattern{ &CharPattern, 1 } {}
         constexpr operator StrView() const { return Pattern; }
 
       protected:
