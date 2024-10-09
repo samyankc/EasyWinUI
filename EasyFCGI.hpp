@@ -46,17 +46,20 @@ namespace ParseUtil
 
     struct StrViewPattern
     {
-        constexpr StrViewPattern() : CharPattern{}, Pattern{} {}
-        constexpr StrViewPattern( const StrViewPattern& Other )  //
-            : CharPattern{ Other.CharPattern },
-              Pattern{ Other.Pattern.data() == &Other.CharPattern ? StrView{ &CharPattern, 1 } : Other.Pattern }
-        {}
-        constexpr StrViewPattern( StrView OtherPattern ) : CharPattern{}, Pattern{ OtherPattern } {}
-        constexpr StrViewPattern( char OtherCharPattern ) : CharPattern{ OtherCharPattern }, Pattern{ &CharPattern, 1 } {}
-        constexpr operator StrView() const { return Pattern; }
+        constexpr static auto ASCII = [] {
+            auto ASCII = std::array<char, 127>{};
+            RNG::iota( ASCII, 0 );
+            return ASCII;
+        }();
+
+        constexpr StrViewPattern() : Pattern{} {};
+        constexpr StrViewPattern( const StrViewPattern& ) = default;
+        constexpr StrViewPattern( std::convertible_to<StrView> auto&& OtherPattern ) : Pattern{ OtherPattern } {};
+        constexpr StrViewPattern( char CharPattern ) : Pattern{ &ASCII[CharPattern], 1 } {}
+        // constexpr operator StrView() const { return Pattern; }
+        constexpr bool operator==( const StrViewPattern& ) const = default;
 
       protected:
-        char CharPattern;
         StrView Pattern;
     };
 
@@ -101,7 +104,6 @@ namespace ParseUtil
 
         struct TrimLeading : StrViewPattern, RNG::range_adaptor_closure<TrimLeading>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr StrView operator()( StrView Input ) const
             {
                 if( Input.starts_with( Pattern ) ) Input.remove_prefix( Pattern.length() );
@@ -111,7 +113,6 @@ namespace ParseUtil
 
         struct TrimTrailing : StrViewPattern, RNG::range_adaptor_closure<TrimTrailing>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr StrView operator()( StrView Input ) const
             {
                 if( Input.ends_with( Pattern ) ) Input.remove_suffix( Pattern.length() );
@@ -121,7 +122,6 @@ namespace ParseUtil
 
         struct Trim : StrViewPattern, RNG::range_adaptor_closure<Trim>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr StrView operator()( StrView Input ) const
             {
                 while( Input.starts_with( Pattern ) ) Input.remove_prefix( Pattern.length() );
@@ -132,7 +132,6 @@ namespace ParseUtil
 
         struct Search : StrViewPattern, RNG::range_adaptor_closure<Search>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr auto operator()( StrView Input ) const -> StrView
             {
                 if consteval { return StrView{ RNG::search( Input, Pattern ) }; }
@@ -150,7 +149,6 @@ namespace ParseUtil
 
         struct Before : StrViewPattern, RNG::range_adaptor_closure<Before>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr StrView operator()( StrView Input ) const
             {
                 auto [InputBegin, InputEnd] = Input | Boundary;
@@ -162,7 +160,6 @@ namespace ParseUtil
 
         struct After : StrViewPattern, RNG::range_adaptor_closure<After>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr StrView operator()( StrView Input ) const
             {
                 // auto [InputBegin, InputEnd] = Input | Boundary;
@@ -180,7 +177,6 @@ namespace ParseUtil
 
         struct Count : StrViewPattern, RNG::range_adaptor_closure<Count>
         {
-            using StrViewPattern::StrViewPattern;
             constexpr std::size_t operator()( StrView Input ) const
             {
                 if( Input.empty() ) return 0;
@@ -199,18 +195,67 @@ namespace ParseUtil
 
         struct SplitOnceBy : StrViewPattern, RNG::range_adaptor_closure<SplitOnceBy>
         {
-            using StrViewPattern::StrViewPattern;
-            constexpr auto operator()( StrView Input ) const
+            using Result = std::array<StrView, 2>;
+            constexpr auto operator()( StrView Input ) const -> Result
             {
-                auto Pivot = Input | Search( Pattern );
-                return std::array{ StrView{ Input.begin(), Pivot.begin() },  //
-                                   StrView{ Pivot.end(), Input.end() } };
+                if( Input.empty() ) return { Input, Input };
+                if( Pattern.empty() ) return { Input.substr( 0, 1 ), Input.substr( 1 ) };
+                auto Match = Search( Pattern ).In( Input );
+                return { StrView{ Input.begin(), Match.begin() },  //
+                         StrView{ Match.end(), Input.end() } };
             }
         };
 
         struct SplitBy : StrViewPattern, RNG::range_adaptor_closure<SplitBy>
         {
-            using StrViewPattern::StrViewPattern;
+            struct View : RNG::view_interface<View>
+            {
+                using SplitterType = SplitOnceBy;
+                SplitterType::Result ProgressionFrame;
+                SplitterType Splitter;
+                constexpr View( SplitterType::Result SourceFrame, SplitterType Splitter ) : ProgressionFrame{ SourceFrame }, Splitter{ Splitter } {}
+                constexpr View( StrView SourceStrView, SplitterType Splitter ) : View( SourceStrView | Splitter, Splitter ) {}
+
+                struct Iterator
+                {
+                    using value_type = StrView;
+                    using difference_type = StrView::difference_type;
+                    SplitterType::Result ProgressionFrame;
+                    SplitterType Splitter;
+                    bool ReachEnd{ false };
+                    constexpr auto operator*() const { return std::get<0>( ProgressionFrame ); }
+                    constexpr auto& operator++()
+                    {
+                        if( std::get<0>( ProgressionFrame ).end() ==  //
+                            std::get<1>( ProgressionFrame ).end() )
+                            ReachEnd = true;
+
+                        ProgressionFrame = std::get<1>( ProgressionFrame ) | Splitter;
+                        return *this;
+                    }
+                    constexpr auto operator++( int )
+                    {
+                        auto OldIter = *this;
+                        ++*this;
+                        return OldIter;
+                    }
+                    constexpr auto operator==( const Iterator& Other ) const -> bool = default;
+                };
+
+                constexpr auto begin() const { return Iterator{ ProgressionFrame, Splitter }; }
+                constexpr auto end() const
+                {
+                    auto SourceEnd = std::get<1>( ProgressionFrame ).end();
+                    auto StrViewEnd = StrView{ SourceEnd, SourceEnd };
+                    return Iterator{ { StrViewEnd, StrViewEnd }, Splitter, true };
+                }
+            };
+
+            constexpr auto operator()( StrView Input ) const { return View{ Input, View::SplitterType{ *this } }; }
+        };
+
+        struct SplitBy_OLD : StrViewPattern, RNG::range_adaptor_closure<SplitBy_OLD>
+        {
             constexpr auto operator()( StrView Input ) const
             {
                 auto Result = std::vector<StrView>();
@@ -290,11 +335,11 @@ namespace ParseUtil
             };
         } RestoreSpaceChar;
 
-        struct SliceAt : RNG::range_adaptor_closure<SliceAt>
+        struct SplitAt : RNG::range_adaptor_closure<SplitAt>
         {
             std::size_t N;
 
-            constexpr SliceAt( std::size_t N ) : N{ N } {}
+            constexpr SplitAt( std::size_t N ) : N{ N } {}
 
             constexpr auto operator()( StrView Input ) const -> std::array<StrView, 2>
             {
@@ -306,19 +351,10 @@ namespace ParseUtil
                              Input.substr( N, Input.length() - N ) };
             }
 
-            template<typename BaseRangeType>  //
-            constexpr auto operator()( BaseRangeType&& BaseRange ) const -> std::array<std::remove_cvref_t<BaseRangeType>, 2>
+            constexpr auto operator()( auto&& BaseRange ) const
             {
-                if( N >= BaseRange.size() )
-                    return { std::move( BaseRange ),  //
-                             BaseRangeType{} };
-                else
-                {
-                    auto [Begin, End] = BaseRange | Boundary;
-                    auto Pivot = std::next( Begin, N );
-                    return { BaseRangeType{ Begin, Pivot },  //
-                             BaseRangeType{ Pivot, End } };
-                }
+                return std::tuple{ BaseRange | VIEW::take( N ),  //
+                                   BaseRange | VIEW::drop( N ) };
             }
         };
 
@@ -335,17 +371,16 @@ namespace ParseUtil
     {
         constexpr auto EncodeDigitWidth = 2;
         auto Result = std::string{};
-        auto [FirstPart, OtherParts] = Fragment | SplitBy( "%" ) | SliceAt( 1 );
+        auto [FirstPart, OtherParts] = Fragment | SplitBy( '%' ) | SplitAt( 1 );
         for( auto LeadingText : FirstPart ) Result += LeadingText | RestoreSpaceChar;
         for( auto Segment : OtherParts )
         {
-            auto [Encoded, Unencoded] = Segment | SliceAt( EncodeDigitWidth );
+            auto [Encoded, Unencoded] = Segment | SplitAt( EncodeDigitWidth );
             Result += Encoded.length() >= EncodeDigitWidth ? HexToChar( Encoded ) : '?';
             Result += Unencoded | RestoreSpaceChar;
         }
         return Result;
     }
-
 };  // namespace ParseUtil
 
 using ParseUtil::operator""_FMT;
@@ -910,6 +945,16 @@ namespace EasyFCGI
                     }
                     case HTTP::ContentType::MultiPart::FormData :
                     {
+                        struct ParseTime
+                        {
+                            std::chrono::steady_clock::time_point StartTime;
+                            ~ParseTime()
+                            {
+                                auto EndTime = std::chrono::steady_clock::now();
+                                std::println( "Multipart Form ParseTime: {:%T}", EndTime - StartTime );
+                            }
+                        } _{ std::chrono::steady_clock::now() };
+
                         auto BoundaryPattern = GetParam( "CONTENT_TYPE" ) | After( "boundary=" ) | TrimSpace;
                         auto ExtendedBoundaryPattern = "\r\n--{}\r\nContent-Disposition: form-data; name="_FMT( BoundaryPattern );
 
