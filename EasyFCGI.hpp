@@ -171,7 +171,8 @@ namespace ParseUtil
         struct Between : RNG::range_adaptor_closure<Between>
         {
             StrViewPattern Left, Right;
-            constexpr Between( auto&& Left, auto&& Right ) : Left{ StrViewPattern{ Left } }, Right{ StrViewPattern{ Right } } {}
+            constexpr Between( StrViewPattern Left, StrViewPattern Right ) : Left{ Left }, Right{ Right } {}
+            constexpr Between( StrViewPattern Same ) : Between( Same, Same ) {}
             constexpr StrView operator()( StrView Input ) const { return Input | After( Left ) | Before( Right ); }
         };
 
@@ -640,6 +641,10 @@ namespace EasyFCGI
             };
             ::sigaction( SIGINT, &SignalAction, nullptr );
             ::sigaction( SIGTERM, &SignalAction, nullptr );
+
+            // sigemptyset( &SignalAction.sa_mask );
+            // SignalAction.sa_handler = SIG_IGN;
+            // ::sigaction( SIGPIPE, &SignalAction, nullptr );
         }
         else
         {
@@ -904,7 +909,7 @@ namespace EasyFCGI
 
         auto Parse() -> int
         {
-            FCGX_Request_Ptr->keepConnection = 0;  // disable connection reuse until fixed
+            // FCGX_Request_Ptr->keepConnection = 0;  // disable connection reuse until fixed
 
             using namespace ParseUtil;
             Query.Json = {};  // .clear() cannot reset residual discarded state
@@ -945,29 +950,33 @@ namespace EasyFCGI
                     }
                     case HTTP::ContentType::MultiPart::FormData :
                     {
-                        struct ParseTime
-                        {
-                            std::chrono::steady_clock::time_point StartTime;
-                            ~ParseTime()
-                            {
-                                auto EndTime = std::chrono::steady_clock::now();
-                                std::println( "Multipart Form ParseTime: {:%T}", EndTime - StartTime );
-                            }
-                        } _{ std::chrono::steady_clock::now() };
+                        // struct ParseTime
+                        // {
+                        //     std::chrono::steady_clock::time_point StartTime;
+                        //     ~ParseTime()
+                        //     {
+                        //         auto EndTime = std::chrono::steady_clock::now();
+                        //         std::println( "Multipart Form ParseTime: {:%T}", EndTime - StartTime );
+                        //     }
+                        // } _{ std::chrono::steady_clock::now() };
 
                         auto BoundaryPattern = GetParam( "CONTENT_TYPE" ) | After( "boundary=" ) | TrimSpace;
                         auto ExtendedBoundaryPattern = "\r\n--{}\r\nContent-Disposition: form-data; name="_FMT( BoundaryPattern );
 
-                        // remove trailing boundary
+                        // remove trailing boundary to avoid empty ending after split
                         auto PayloadView = Payload | TrimSpace | TrimTrailing( "--" ) | TrimTrailing( BoundaryPattern ) | TrimTrailing( "\r\n--" );
                         if( PayloadView.empty() ) break;
 
                         auto NameFieldPrefix = StrView{ "name=" };
-                        BoundaryPattern = ExtendedBoundaryPattern;
-                        if( PayloadView.starts_with( BoundaryPattern.substr( 2 ) ) )  // enable ExtendedBoundaryPattern
+                        if( PayloadView.starts_with( ExtendedBoundaryPattern.substr( 2 ) ) )
+                        {  // enable ExtendedBoundaryPattern
+                            BoundaryPattern = ExtendedBoundaryPattern;
                             NameFieldPrefix = NameFieldPrefix | CollapseToEnd;
-                        else                                                          // fallback to standard
-                            BoundaryPattern = BoundaryPattern | Before( "Content-Disposition" );
+                        }
+                        else
+                        {  // fallback to standard
+                            BoundaryPattern = ExtendedBoundaryPattern | Before( "Content-Disposition" );
+                        }
 
                         PayloadView = PayloadView | TrimLeading( BoundaryPattern.substr( 2 ) );
 
@@ -977,10 +986,9 @@ namespace EasyFCGI
                         {
                             auto [Header, Content] = Body | SplitOnceBy( "\r\n\r\n" );
 
-                            const auto BetweenQuote = Between( '"', '"' );
-                            auto Name = Header | After( NameFieldPrefix ) | BetweenQuote;
+                            auto Name = Header | After( NameFieldPrefix ) | Between( '"' );
                             if( Name.empty() ) break;  // should never happen?
-                            auto FileName = Header | After( "filename=" ) | BetweenQuote;
+                            auto FileName = Header | After( "filename=" ) | Between( '"' );
                             auto ContentType = Header | After( "\r\n" ) | After( "Content-Type:" ) | TrimSpace;
 
                             if( ContentType.empty() ) { QueryAppend( Name, Content ); }
@@ -1060,7 +1068,7 @@ namespace EasyFCGI
             auto operator*() const { return *this; }
             auto& operator++() & { return *this; }
             auto operator++( int ) const { return *this; }
-            auto operator=( char C ) const { return FCGX_PutChar( C, Out ), C; }
+            auto operator=( char C ) const { return FCGX_PutChar( C, Out ); }
         };
 
         auto Send( StrView Content ) const
@@ -1115,6 +1123,7 @@ namespace EasyFCGI
         {
             Send( Response.Body );
             Response.Body.clear();
+            // if( FCGX_GetError( FCGX_Request_Ptr->out ) < 0 ) return -1;
             return FCGX_FFlush( FCGX_Request_Ptr->out );
         }
 
