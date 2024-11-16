@@ -209,13 +209,9 @@ namespace EasyString
 
     constexpr auto TrimSpace( StrView Input ) -> StrView
     {
-        constexpr auto SpaceChar = []( const char c ) {  //
-            return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
-        };
-        return std::all_of( Input.begin(), Input.end(), SpaceChar )  //
-                   ? StrView{ Input.end(), 0 }
-                   : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),  //
-                              std::find_if_not( Input.rbegin(), Input.rend(), SpaceChar ).base() };
+        Input = { std::ranges::find_if_not( Input, ::isspace ), Input.end() };
+        if( Input.empty() ) return Input;
+        return { Input.begin(), std::ranges::find_last_if_not( Input, ::isspace ).begin() + 1 };
     }
 
     constexpr auto After( StrView Pattern )
