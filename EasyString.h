@@ -209,17 +209,13 @@ namespace EasyString
 
     constexpr auto TrimSpace( StrView Input ) -> StrView
     {
-        Input = { std::ranges::find_if_not( Input, ::isspace ), Input.end() };
-        if( Input.empty() ) return Input;
-        return { Input.begin(), std::ranges::find_last_if_not( Input, ::isspace ).begin() + 1 };
-
-        // constexpr auto SpaceChar = []( const char c ) {  //
-        //     return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
-        // };
-        // return std::all_of( Input.begin(), Input.end(), SpaceChar )                       //
-        //            ? StrView{ Input.end(), 0 }
-        //            : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),  //
-        //                       std::find_if_not( Input.rbegin(), Input.rend(), SpaceChar ).base() };
+        constexpr auto SpaceChar = []( const char c ) {  //
+            return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
+        };
+        return std::all_of( Input.begin(), Input.end(), SpaceChar )  //
+                   ? StrView{ Input.end(), 0 }
+                   : StrView{ std::find_if_not( Input.begin(), Input.end(), SpaceChar ),  //
+                              std::find_if_not( Input.rbegin(), Input.rend(), SpaceChar ).base() };
     }
 
     constexpr auto After( StrView Pattern )
@@ -261,7 +257,6 @@ namespace EasyString
         return Impl{ Pattern };
     }
 
-    [[deprecated]]
     constexpr auto Split__deprecated( StrView Pattern )
     {
         struct Impl : StrViewUnit
@@ -543,49 +538,6 @@ namespace EasyString
         friend auto operator|( auto SourceRange, const Skip& Adaptor ) { return InternalRange{ SourceRange, Adaptor.N }; }
     };
 
-    template<typename FirstRange, typename SecondRange>
-    struct Zip
-    {
-        using FirstIterType = decltype( std::begin( std::declval<FirstRange>() ) );
-        using FirstSentinelType = decltype( std::end( std::declval<FirstRange>() ) );
-        using SecondIterType = decltype( std::begin( std::declval<SecondRange>() ) );
-        using SecondSentinelType = decltype( std::end( std::declval<SecondRange>() ) );
-
-        FirstIterType FirstBegin;
-        SecondIterType SecondBegin;
-
-        FirstSentinelType FirstEnd;
-        SecondSentinelType SecondEnd;
-
-        constexpr Zip() = delete;
-        constexpr Zip( auto&& ) = delete;
-        constexpr Zip( const Zip& ) = default;
-        constexpr Zip( const FirstRange& FR, const SecondRange& SR )
-            : FirstBegin{ std::begin( FR ) },
-              SecondBegin{ std::begin( SR ) },
-              FirstEnd{ std::end( FR ) },
-              SecondEnd{ std::end( SR ) }
-        {}
-
-        struct Sentinel
-        {};
-
-        friend auto operator!=( const Zip& Iter, const Sentinel& ) { return Iter.FirstBegin != Iter.FirstEnd && Iter.SecondBegin != Iter.SecondEnd; }
-        friend auto operator!=( const Sentinel& S, const Zip& Iter ) { return Iter != S; }
-
-        auto& operator++()
-        {
-            ++FirstBegin;
-            ++SecondBegin;
-            return *this;
-        }
-
-        auto operator*() const { return std::pair{ *FirstBegin, *SecondBegin }; }
-
-        auto begin() const { return *this; }
-        auto end() const { return Sentinel{}; }
-    };
-
     struct SliceAt
     {
         int N;
@@ -623,16 +575,6 @@ namespace EasyString
         constexpr auto With( char ReplacementChar ) const { return ( struct With ){ OriginalChar, ReplacementChar }; };
     };
 
-    // inline constexpr auto operator+( const std::string& LHS, const StrView& RHS ) -> std::string  //
-    // {
-    //     return LHS + std::string{ RHS };
-    // }
-
-    // inline constexpr auto operator+( const StrView& LHS, const auto& RHS ) -> std::string  //
-    // {
-    //     return std::string{ LHS } + RHS;
-    // }
-
     template<std::size_t N, typename CharT = char>
     struct FixedString
     {
@@ -641,19 +583,9 @@ namespace EasyString
         constexpr operator std::basic_string_view<CharT>() const noexcept { return { Data }; }
     };
 
-    // template<FixedString FSTR>
-    // struct FMT
-    // {
-    //     constexpr static auto operator()( auto&&... args )
-    //     {
-    //         return std::format( FSTR, std::forward<decltype( args )>( args )... );
-    //     }
-    // };
-
     template<FixedString FSTR>
     constexpr auto operator""_FMT() noexcept
     {
-        // return FMT<FSTR>{};
         return []( auto&&... args ) { return std::format( FSTR, std::forward<decltype( args )>( args )... ); };
     }
 
@@ -672,8 +604,7 @@ namespace EasyString
     {
         constexpr static auto operator()( char C )
         {
-            if( 'A' <= C && C <= 'Z' ) C += 'a' - 'A';
-            return C;
+            return static_cast<char>( std::tolower( static_cast<unsigned char>( C ) ) );
         }
         constexpr static auto operator()( std::string_view Source )
         {
@@ -681,7 +612,6 @@ namespace EasyString
             std::ranges::transform( Source, Result.begin(), ToLowerCallableType{} );
             return Result;
         }
-
         template<FunctionPointer F>
         constexpr operator F() const
         {
@@ -694,22 +624,25 @@ namespace EasyString
     {
         constexpr static bool Equal_impl( char LHS, char RHS ) { return ToLower( LHS ) == ToLower( RHS ); }
         constexpr static bool operator()( char LHS, char RHS ) { return Equal_impl( LHS, RHS ); }
-        constexpr static bool operator()( auto P ) { return Equal_impl( std::get<0>( P ), std::get<1>( P ) ); }
         constexpr static bool operator()( std::string_view LHS, std::string_view RHS )
         {
             if( LHS.length() != RHS.length() ) return false;
-            // return std::ranges::all_of( std::views::zip( LHS, RHS ), CaseInsensitiveEqualCallableType{} );
-            for( auto [a, b] : Zip( LHS, RHS ) )
-                if( ! Equal_impl( a, b ) ) return false;
-            return true;
+            return std::ranges::all_of( std::views::zip( LHS, RHS ), []( auto&& P ) { return Equal_impl( std::get<0>( P ), std::get<1>( P ) ); } );
         }
     };
-
     constexpr auto CaseInsensitiveEqual = CaseInsensitiveEqualCallableType{};
+
+    struct CaseInsensitiveContainCallableType
+    {
+        constexpr static bool operator()( std::string_view Source, std::string_view Pattern )
+        {  //
+            return std::ranges::contains_subrange( Source, Pattern, CaseInsensitiveEqual );
+        }
+    };
+    constexpr auto CaseInsensitiveContain = CaseInsensitiveContainCallableType{};
 
 }  // namespace EasyString
 
 using EasyString::operator""_FMT;
-// using EasyString::operator+;  // NOLINT
 
 #endif
